@@ -18,7 +18,7 @@ import (
 // examples/scheduled-compartment/plugin.yaml.
 const (
 	pluginIDValue   = "io.github.deliciousbuding.cloud-path-app-scheduled-compartment"
-	pluginVersion   = "0.1.0"
+	pluginVersion   = "0.1.1"
 	jobWindowCheck  = "window-check"
 	windowCheckCron = "* * * * *"
 	alarmAction     = "trigger"

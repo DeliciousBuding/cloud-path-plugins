@@ -1,11 +1,15 @@
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Application
 id: io.github.deliciousbuding.cloud-path-app-scheduled-compartment
-version: 0.1.0
+version: 0.1.1
 protocol: 1
 # Executable entrypoint. The Application Protocol v1 service is implemented in
 # cmd/cloud-path-app-scheduled-compartment and served over the host transport.
 entrypoint: cloud-path-app-scheduled-compartment
+compatibility:
+  # Core compatibility range. The registry installer fails closed without it
+  # (ERR_CORE_INCOMPATIBLE), so a published manifest must always declare it.
+  core: ">=0.1.0 <0.2.0"
 requirements:
   - id: reminder-output
     capability: cloudpath.dev/capability/alarm@1
