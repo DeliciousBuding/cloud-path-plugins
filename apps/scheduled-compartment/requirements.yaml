@@ -1,0 +1,15 @@
+# Capability requirements for Scheduled Compartment.
+# Kept alongside plugin.yaml for human review; plugin.yaml is the machine manifest.
+# The application is implemented as a process-based Application Protocol v1 service
+# in cmd/cloud-path-app-scheduled-compartment.
+requirements:
+  - id: reminder-output
+    capability: cloudpath.dev/capability/alarm@1
+    cardinality: one
+  - id: compartments
+    capability: cloudpath.dev/capability/contact@1
+    cardinality: one-or-more
+    minItems: 3
+  - id: local-display
+    capability: cloudpath.dev/capability/display-text@1
+    cardinality: zero-or-one

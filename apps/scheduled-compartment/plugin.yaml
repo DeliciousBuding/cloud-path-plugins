@@ -1,0 +1,25 @@
+apiVersion: plugins.cloudpath.dev/v1alpha1
+kind: Application
+id: io.github.deliciousbuding.cloud-path-app-scheduled-compartment
+version: 0.1.0
+protocol: 1
+# Executable entrypoint. The Application Protocol v1 service is implemented in
+# cmd/cloud-path-app-scheduled-compartment and served over the host transport.
+entrypoint: cloud-path-app-scheduled-compartment
+requirements:
+  - id: reminder-output
+    capability: cloudpath.dev/capability/alarm@1
+    cardinality: one
+  - id: compartments
+    capability: cloudpath.dev/capability/contact@1
+    cardinality: one-or-more
+    minItems: 3
+  - id: local-display
+    capability: cloudpath.dev/capability/display-text@1
+    cardinality: zero-or-one
+contributes:
+  # The application id is the stable, semantic contribution id; it is distinct
+  # from the plugin id at the top of this file.
+  applications:
+    - id: scheduled-compartment
+      title: Scheduled Compartment
