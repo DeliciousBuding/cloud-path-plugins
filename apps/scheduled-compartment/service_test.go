@@ -167,6 +167,49 @@ func (a *testApp) recvEffects(idle time.Duration) []*application.ApplicationEffe
 	return out
 }
 
+// waitEffects 先条件等待至 least 个效果到达（30s 上限），再按 idle 语义把同批
+// 余量收干。慢机/满载下首个效果的到达可远晚于固定 idle 窗（Windows CI 实测
+// 60ms 被击穿收到空集）；正断言与阶段间 drain 必须用它。同一事件的效果由服务
+// 端连续产出，首个到达后其余紧随其后，idle 收干即可保证不泄漏进下一阶段。
+func (a *testApp) waitEffects(least int, idle time.Duration) []*application.ApplicationEffect {
+	a.t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	var out []*application.ApplicationEffect
+	for len(out) < least {
+		remain := time.Until(deadline)
+		if remain <= 0 {
+			a.t.Fatalf("waitEffects: 超时只收到 %d/%d 个效果", len(out), least)
+		}
+		rctx, cancel := context.WithTimeout(a.ctx, remain)
+		eff, err := a.stream.Recv(rctx)
+		cancel()
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				a.t.Fatalf("waitEffects: 超时只收到 %d/%d 个效果", len(out), least)
+			}
+			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) || errors.Is(err, transport.ErrClosed) {
+				a.t.Fatalf("waitEffects: 流已关闭，收到 %d/%d 个效果: %v", len(out), least, err)
+			}
+			a.t.Fatalf("recv effect: %v", err)
+		}
+		out = append(out, eff)
+	}
+	for {
+		rctx, cancel := context.WithTimeout(a.ctx, idle)
+		eff, err := a.stream.Recv(rctx)
+		cancel()
+		if err != nil {
+			if errors.Is(err, io.EOF) || errors.Is(err, context.DeadlineExceeded) ||
+				errors.Is(err, context.Canceled) || errors.Is(err, transport.ErrClosed) {
+				break
+			}
+			a.t.Fatalf("recv effect: %v", err)
+		}
+		out = append(out, eff)
+	}
+	return out
+}
+
 func (a *testApp) runJob(jobID, idem string) *application.RunJobResponse {
 	a.t.Helper()
 	resp, err := a.cli.RunJob(a.ctx, &application.RunJobRequest{
@@ -328,7 +371,7 @@ func TestWindowReminderEffect(t *testing.T) {
 	defer a.close()
 	a.openStream()
 	a.send(1, &application.ScheduleTick{ScheduleID: "s-1", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON})
-	effects := a.recvEffects(60 * time.Millisecond)
+	effects := a.waitEffects(3, 60*time.Millisecond)
 
 	var gotRequest *application.RequestCommand
 	var gotUpsert bool
@@ -365,7 +408,7 @@ func TestContactCompletesWindow(t *testing.T) {
 	defer a.close()
 	a.openStream()
 	a.send(1, &application.ScheduleTick{ScheduleID: "s-1", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON})
-	_ = a.recvEffects(60 * time.Millisecond)
+	_ = a.waitEffects(3, 60*time.Millisecond)
 
 	a.send(2, &application.CapabilityEvent{
 		RequirementID: "compartments",
@@ -373,7 +416,7 @@ func TestContactCompletesWindow(t *testing.T) {
 		EventType:     "cloudpath.dev/capability/contact@1/opened",
 		OccurredAt:    "2026-09-03T08:05:00+08:00",
 	})
-	effects := a.recvEffects(60 * time.Millisecond)
+	effects := a.waitEffects(2, 60*time.Millisecond)
 	if got := windowStateOf(effects, "win-1"); got != windowCompleted {
 		t.Fatalf("window state = %q, want %q", got, windowCompleted)
 	}
@@ -388,7 +431,7 @@ func TestMissedWindowRecord(t *testing.T) {
 	defer a.close()
 	a.openStream()
 	a.send(1, &application.ScheduleTick{ScheduleID: "s-1", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON})
-	_ = a.recvEffects(60 * time.Millisecond)
+	_ = a.waitEffects(3, 60*time.Millisecond)
 
 	// advance the clock past the window end and run the window-check job
 	a.now = time.Date(2026, 9, 3, 8, 31, 0, 0, time.UTC)
@@ -399,7 +442,7 @@ func TestMissedWindowRecord(t *testing.T) {
 	if !strings.Contains(resp.ResultJSON, "win-1") {
 		t.Fatalf("result %s does not mention win-1", resp.ResultJSON)
 	}
-	effects := a.recvEffects(60 * time.Millisecond)
+	effects := a.waitEffects(3, 60*time.Millisecond)
 	if got := windowStateOf(effects, "win-1"); got != windowMissed {
 		t.Fatalf("window state = %q, want %q", got, windowMissed)
 	}
@@ -426,7 +469,7 @@ func TestDuplicateEventIdempotent(t *testing.T) {
 	a.openStream()
 
 	a.send(1, &application.ScheduleTick{ScheduleID: "s-1", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON})
-	start := a.recvEffects(60 * time.Millisecond)
+	start := a.waitEffects(3, 60*time.Millisecond)
 	if n := countRequestCommand(start); n != 1 {
 		t.Fatalf("window start emitted %d RequestCommand, want 1", n)
 	}
@@ -440,7 +483,7 @@ func TestDuplicateEventIdempotent(t *testing.T) {
 		RequirementID: "compartments", EntityID: c1, EventType: "cloudpath.dev/capability/contact@1/opened",
 		OccurredAt: "2026-09-03T08:05:00+08:00",
 	})
-	after := a.recvEffects(60 * time.Millisecond)
+	after := a.waitEffects(2, 60*time.Millisecond)
 	if n := countRequestCommand(after); n != 0 {
 		t.Fatalf("duplicate events emitted %d additional RequestCommand, want 0", n)
 	}
