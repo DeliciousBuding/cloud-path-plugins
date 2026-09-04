@@ -80,6 +80,8 @@ python scripts/validate_manifest.py plugin.yaml --dir .
 | `baud` | 缺省 9600 |
 | `poll_interval_s` | 取帧周期（S 转储 + V 传感器），缺省 5 |
 
+> Edge 部署时，此实例配置由 Server desired state 注入（不要假设 `edge.yaml` 的 `devices[].port` 会自动成为外部 Driver 的串口）。本地快速验证可 `cloudpath plugin enable <id> -config config.example.json` 后 `cloudpath plugin host`。
+
 ## 能力与实体
 
 Driver id：`stcb`；插件 id：`io.github.deliciousbuding.cloud-path-driver-stcb`。
