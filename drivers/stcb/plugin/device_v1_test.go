@@ -52,6 +52,63 @@ func newFakeV1Device(id string, p *fakePort) *device {
 	return &device{cfg: deviceConfig{ID: id, Protocol: "v1"}, port: p, protocolV1: true, waiters: map[string]chan DeviceAck{}, done: make(chan struct{})}
 }
 
+// TestDeviceEventFlowToCapabilityScope 锁定设备事件扇入链（P5 软件层）：
+// 固件 EVENT:<body> 行 → onEvent 回调携带 capability 命名空间的
+// (entityID, eventType)。物理按键/磁铁无法自动化，这是事件全部软件路径
+// 的可测边界；驱动不得重新引入药盒业务语义（hall=close 是硬件事实）。
+func TestDeviceEventFlowToCapabilityScope(t *testing.T) {
+	p := &fakePort{}
+	d := newFakeV1Device("board-1", p)
+	var mu sync.Mutex
+	var got []string
+	d.onEvent = func(entityID, eventType string) {
+		mu.Lock()
+		got = append(got, entityID+" "+eventType)
+		mu.Unlock()
+	}
+
+	d.handleLine("EVENT:key1=press")
+	d.handleLine("EVENT:key1=release")
+	d.handleLine("EVENT:hall=close")
+	d.handleLine("EVENT:hall=away")
+	d.handleLine("EVENT:vib=quake")
+	d.handleLine("EVENT:nav=2:press")
+	d.handleLine("EVENT:key3:release")
+	d.handleLine("EVENT:")     // 空体：不是事件
+	d.handleLine("GARBAGE")    // 无关行：不产生事件
+	d.handleLine("STATE:junk") // 非法 STATE：解析失败即丢弃
+
+	mu.Lock()
+	defer mu.Unlock()
+	want := []string{
+		"key1 " + capKey + "/press",
+		"key1 " + capKey + "/release",
+		"hall " + capHall + "/close",
+		"hall " + capHall + "/away",
+		"vibration " + capVib + "/quake",
+		"navigation " + capNav + "/2:press",
+		"key3 " + capKey + "/release",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("事件数 = %d want %d: %v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("事件[%d] = %q, want %q（全部: %v）", i, got[i], want[i], got)
+		}
+	}
+}
+
+// TestNormalizeProtocolEventUnknownPassthrough 锁定未知事件体的归属语义：
+// 不认识的事件原样作为 eventType 交给上层（entity 为空），绝不静默吞掉
+// （新增传感器事件形态时上层仍可观测），也绝不猜一个 capability 前缀。
+func TestNormalizeProtocolEventUnknownPassthrough(t *testing.T) {
+	entity, eventType := NormalizeProtocolEvent("future-sensor=triggered")
+	if entity != "" || eventType != "future-sensor=triggered" {
+		t.Fatalf("未知事件 = (%q, %q), want (\"\", 原样)", entity, eventType)
+	}
+}
+
 func TestSendV1CommandWaitsForMatchingACK(t *testing.T) {
 	p := &fakePort{}
 	d := newFakeV1Device("board-1", p)
