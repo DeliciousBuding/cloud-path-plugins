@@ -18,13 +18,13 @@ import (
 // examples/scheduled-compartment/plugin.yaml.
 const (
 	pluginIDValue   = "io.github.deliciousbuding.cloud-path-app-scheduled-compartment"
-	pluginVersion   = "0.1.1"
+	pluginVersion   = "0.2.0"
 	jobWindowCheck  = "window-check"
 	windowCheckCron = "* * * * *"
-	alarmAction     = "trigger"
+	buzzerAction    = "buzzer"
 	displayCap      = "cloudpath.dev/capability/display-text@1"
-	alarmCap        = "cloudpath.dev/capability/alarm@1"
-	contactCap      = "cloudpath.dev/capability/contact@1"
+	buzzerCap       = "cloudpath.dev/capability/buzzer@1"
+	keyCap          = "cloudpath.dev/capability/key@1"
 )
 
 // window state values stored in domain records.
@@ -34,22 +34,22 @@ const (
 	windowMissed    = "missed"
 )
 
-// contact event types delivered by the contact@1 capability.
-const (
-	contactOpenedEvent = contactCap + "/opened"
-	contactClosedEvent = contactCap + "/closed"
-)
+// keyPressEvent is the event type delivered by the key@1 capability. A key
+// press on a bound compartment entity means "the user confirmed this
+// compartment": that interpretation lives here, in the application, and never
+// in a Driver.
+const keyPressEvent = keyCap + "/press"
 
 // windowTrack is the in-memory runtime state for one scheduled window instance.
 type windowTrack struct {
-	ID          string
-	Compartment string
-	Start       time.Time
-	End         time.Time
-	State       string
-	OpenedAt    time.Time
-	ClosedAt    time.Time
-	AlarmEntity string
+	ID             string
+	Compartment    string
+	Start          time.Time
+	End            time.Time
+	State          string
+	OpenedAt       time.Time
+	ClosedAt       time.Time
+	ReminderEntity string
 }
 
 // instanceState is the per-plugin-instance runtime state.
@@ -145,8 +145,8 @@ func (s *Service) Describe(context.Context) (*application.ApplicationDescriptor,
 		Version:        s.version,
 		SchemaVersions: []string{application.SchemaVersion},
 		Requirements: []application.RequirementDescriptor{
-			{ID: "reminder-output", Capability: alarmCap, Cardinality: "one"},
-			{ID: "compartments", Capability: contactCap, Cardinality: "one-or-more", MinItems: 3},
+			{ID: "reminder-output", Capability: buzzerCap, Cardinality: "one"},
+			{ID: "compartments", Capability: keyCap, Cardinality: "one-or-more", MinItems: 3},
 			{ID: "local-display", Capability: displayCap, Cardinality: "zero-or-one"},
 		},
 		Jobs: []application.JobDescriptor{
@@ -286,9 +286,9 @@ func (s *Service) onScheduleTick(instanceID string, tick *application.ScheduleTi
 		s.mu.Unlock()
 		return nil // unknown compartment
 	}
-	w.AlarmEntity = alarmEntity(st)
+	w.ReminderEntity = reminderEntity(st)
 	st.windows[w.ID] = w
-	effects := s.windowStartEffects(w)
+	effects := s.windowStartEffects(st, w)
 	s.mu.Unlock()
 
 	return s.flush(instanceID, effects)
@@ -299,17 +299,20 @@ func (s *Service) onCapabilityEvent(instanceID string, ev *application.Capabilit
 		return nil
 	}
 	switch ev.EventType {
-	case contactOpenedEvent, contactClosedEvent:
-		return s.onContactEvent(instanceID, ev)
+	case keyPressEvent:
+		return s.onKeyEvent(instanceID, ev)
 	default:
 		return nil
 	}
 }
 
-func (s *Service) onContactEvent(instanceID string, ev *application.CapabilityEvent) error {
+// onKeyEvent interprets a key press on a bound compartment entity as the user
+// confirming that compartment. The business meaning of the generic key@1
+// event lives entirely here.
+func (s *Service) onKeyEvent(instanceID string, ev *application.CapabilityEvent) error {
 	s.mu.Lock()
 	st := s.instance(instanceID)
-	compID := contactToCompartment(st, ev.EntityID)
+	compID := keyToCompartment(st, ev.EntityID)
 	if compID == "" {
 		s.mu.Unlock()
 		return nil // not a bound compartment entity
@@ -326,11 +329,7 @@ func (s *Service) onContactEvent(instanceID string, ev *application.CapabilityEv
 		return nil // no active window for this compartment; idempotent
 	}
 	active.State = windowCompleted
-	if ev.EventType == contactOpenedEvent {
-		active.OpenedAt = parseOccurred(ev.OccurredAt)
-	} else {
-		active.ClosedAt = parseOccurred(ev.OccurredAt)
-	}
+	active.ClosedAt = parseOccurred(ev.OccurredAt)
 	effects := []application.ApplicationEffectUnion{
 		windowRecord(active),
 		cancelTaskEffect(active.ID),
@@ -341,10 +340,10 @@ func (s *Service) onContactEvent(instanceID string, ev *application.CapabilityEv
 }
 
 func (s *Service) onRequestCompleted(_ string, ev *application.RequestCompleted) error {
-	// RequestCompleted acknowledges the alarm command lifecycle. It does not
-	// change the schedule state machine: only a contact event completes a
-	// window and the window-check job records a missed window. It is handled so
-	// the stream stays healthy and is intentionally a no-op for state.
+	// RequestCompleted acknowledges the reminder command lifecycle. It does not
+	// change the schedule state machine: only a key press completes a window
+	// and the window-check job records a missed window. It is handled so the
+	// stream stays healthy and is intentionally a no-op for state.
 	_ = ev
 	return nil
 }
@@ -518,13 +517,17 @@ func (s *Service) instance(id string) *instanceState {
 	return st
 }
 
-func (s *Service) windowStartEffects(w *windowTrack) []application.ApplicationEffectUnion {
+func (s *Service) windowStartEffects(st *instanceState, w *windowTrack) []application.ApplicationEffectUnion {
 	effects := []application.ApplicationEffectUnion{windowRecord(w)}
-	if w.AlarmEntity != "" {
+	if w.ReminderEntity != "" {
+		policy := Reminder{Freq: 1, Duration: 1}
+		if st != nil && st.config != nil {
+			policy = st.config.ResolvedReminder()
+		}
 		effects = append(effects, &application.RequestCommand{
-			EntityID:       w.AlarmEntity,
-			Action:         alarmAction,
-			ArgsJSON:       "{}",
+			EntityID:       w.ReminderEntity,
+			Action:         buzzerAction,
+			ArgsJSON:       mustJSON(map[string]int{"freq": policy.Freq, "duration": policy.Duration}),
 			IdempotencyKey: "reminder-" + w.ID,
 			Deadline:       w.End.UTC().Format(time.RFC3339),
 		})
@@ -619,7 +622,7 @@ func (c *Config) hasCompartment(id string) bool {
 	return false
 }
 
-func alarmEntity(st *instanceState) string {
+func reminderEntity(st *instanceState) string {
 	if st == nil {
 		return ""
 	}
@@ -629,13 +632,13 @@ func alarmEntity(st *instanceState) string {
 	return ""
 }
 
-func contactToCompartment(st *instanceState, entity string) string {
+func keyToCompartment(st *instanceState, entity string) string {
 	if st == nil || st.config == nil {
 		return ""
 	}
-	contacts := st.bindings["compartments"]
+	keys := st.bindings["compartments"]
 	comps := st.config.Compartments
-	for i, c := range contacts {
+	for i, c := range keys {
 		if i >= len(comps) {
 			break
 		}
@@ -645,6 +648,10 @@ func contactToCompartment(st *instanceState, entity string) string {
 	}
 	return ""
 }
+
+// keyToCompartment maps a bound key entity to its configured compartment by
+// binding order. The application gives business meaning to the key: the
+// Driver only reports a generic key press.
 
 func activeCount(st *instanceState) int {
 	n := 0
@@ -704,14 +711,14 @@ func parseOccurred(s string) time.Time {
 
 func windowRecord(w *windowTrack) *application.UpsertDomainRecord {
 	data := map[string]any{
-		"id":           w.ID,
-		"compartment":  w.Compartment,
-		"start":        w.Start.UTC().Format(time.RFC3339),
-		"end":          w.End.UTC().Format(time.RFC3339),
-		"state":        w.State,
-		"opened_at":    optTime(w.OpenedAt),
-		"closed_at":    optTime(w.ClosedAt),
-		"alarm_entity": w.AlarmEntity,
+		"id":              w.ID,
+		"compartment":     w.Compartment,
+		"start":           w.Start.UTC().Format(time.RFC3339),
+		"end":             w.End.UTC().Format(time.RFC3339),
+		"state":           w.State,
+		"opened_at":       optTime(w.OpenedAt),
+		"closed_at":       optTime(w.ClosedAt),
+		"reminder_entity": w.ReminderEntity,
 	}
 	return &application.UpsertDomainRecord{
 		RecordType: "window",

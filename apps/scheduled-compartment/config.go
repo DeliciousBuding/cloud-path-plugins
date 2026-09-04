@@ -14,12 +14,37 @@ import (
 
 // Config is the bounded instance configuration for the Scheduled Compartment
 // application. It is intentionally device-agnostic: it carries a timezone,
-// the configured compartments and a list of daily schedule windows. It never
-// references a Driver ID, a port or any vendor-specific field.
+// the configured compartments, a list of daily schedule windows and a bounded
+// reminder policy. It never references a Driver ID, a port or any
+// vendor-specific field.
 type Config struct {
 	Timezone     string        `json:"timezone"`
 	Compartments []Compartment `json:"compartments"`
 	Schedule     []WindowSpec  `json:"schedule"`
+	// Reminder configures the reminder-output effect payload (buzzer freq and
+	// duration steps). Zero values fall back to the quiet defaults.
+	Reminder *Reminder `json:"reminder,omitempty"`
+}
+
+// Reminder is the bounded reminder policy for the buzzer capability action.
+// Freq and Duration are hardware step levels (0-9) as defined by the buzzer
+// capability; defaults are deliberately quiet and short.
+type Reminder struct {
+	Freq     int `json:"freq"`
+	Duration int `json:"duration"`
+}
+
+// defaultReminder is the fallback when the config omits the reminder policy:
+// the lowest meaningful volume step and a short single beep. An explicit
+// reminder block is honoured as-is (including a deliberately silent one).
+var defaultReminder = Reminder{Freq: 1, Duration: 1}
+
+// ResolvedReminder returns the effective reminder policy with defaults applied.
+func (c Config) ResolvedReminder() Reminder {
+	if c.Reminder == nil {
+		return defaultReminder
+	}
+	return *c.Reminder
 }
 
 // Compartment is one managed compartment. ID is the stable, local key used to
@@ -95,6 +120,15 @@ func (c Config) Validate() error {
 		}
 		if ok && !end.After(start) {
 			errs = append(errs, fmt.Sprintf("schedule[%d].end %q must be after start %q", i, w.End, w.Start))
+		}
+	}
+
+	if c.Reminder != nil {
+		if c.Reminder.Freq < 0 || c.Reminder.Freq > 9 {
+			errs = append(errs, fmt.Sprintf("reminder.freq %d is outside the buzzer step range 0-9", c.Reminder.Freq))
+		}
+		if c.Reminder.Duration < 0 || c.Reminder.Duration > 9 {
+			errs = append(errs, fmt.Sprintf("reminder.duration %d is outside the buzzer step range 0-9", c.Reminder.Duration))
 		}
 	}
 

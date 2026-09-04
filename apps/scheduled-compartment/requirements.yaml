@@ -4,10 +4,10 @@
 # in cmd/cloud-path-app-scheduled-compartment.
 requirements:
   - id: reminder-output
-    capability: cloudpath.dev/capability/alarm@1
+    capability: cloudpath.dev/capability/buzzer@1
     cardinality: one
   - id: compartments
-    capability: cloudpath.dev/capability/contact@1
+    capability: cloudpath.dev/capability/key@1
     cardinality: one-or-more
     minItems: 3
   - id: local-display

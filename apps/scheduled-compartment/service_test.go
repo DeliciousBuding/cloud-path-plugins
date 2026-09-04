@@ -14,11 +14,11 @@ import (
 )
 
 const (
-	testInstance  = "app-1"
-	alarmEntityID = "dev/alarm"
-	c1            = "dev/compartment-1"
-	c2            = "dev/compartment-2"
-	c3            = "dev/compartment-3"
+	testInstance   = "app-1"
+	buzzerEntityID = "dev/buzzer"
+	c1             = "dev/key-1"
+	c2             = "dev/key-2"
+	c3             = "dev/key-3"
 )
 
 var validConfigJSON = `{
@@ -34,7 +34,7 @@ var validConfigJSON = `{
 }`
 
 var validBindings = []application.Binding{
-	{RequirementID: "reminder-output", EntityID: alarmEntityID},
+	{RequirementID: "reminder-output", EntityID: buzzerEntityID},
 	{RequirementID: "compartments", EntityID: c1},
 	{RequirementID: "compartments", EntityID: c2},
 	{RequirementID: "compartments", EntityID: c3},
@@ -261,7 +261,7 @@ func TestDescriptorRequirements(t *testing.T) {
 	if desc.ApplicationID != "io.github.deliciousbuding.cloud-path-app-scheduled-compartment" {
 		t.Fatalf("application id = %q", desc.ApplicationID)
 	}
-	if desc.Version != "0.1.1" {
+	if desc.Version != "0.2.0" {
 		t.Fatalf("version = %q", desc.Version)
 	}
 	if desc.DeclarativeOnly {
@@ -275,8 +275,8 @@ func TestDescriptorRequirements(t *testing.T) {
 		card string
 		min  uint32
 	}{
-		"reminder-output": {"cloudpath.dev/capability/alarm@1", "one", 0},
-		"compartments":    {"cloudpath.dev/capability/contact@1", "one-or-more", 3},
+		"reminder-output": {"cloudpath.dev/capability/buzzer@1", "one", 0},
+		"compartments":    {"cloudpath.dev/capability/key@1", "one-or-more", 3},
 		"local-display":   {"cloudpath.dev/capability/display-text@1", "zero-or-one", 0},
 	}
 	for _, r := range desc.Requirements {
@@ -332,7 +332,7 @@ func TestConfigureAndValidateBinding(t *testing.T) {
 
 	// fewer than 3 compartments -> invalid
 	bad2 := []application.Binding{
-		{RequirementID: "reminder-output", EntityID: alarmEntityID},
+		{RequirementID: "reminder-output", EntityID: buzzerEntityID},
 		{RequirementID: "compartments", EntityID: c1},
 		{RequirementID: "compartments", EntityID: c2},
 	}
@@ -342,7 +342,7 @@ func TestConfigureAndValidateBinding(t *testing.T) {
 
 	// unknown requirement -> invalid (structural driver-coupling rejection)
 	bad3 := []application.Binding{
-		{RequirementID: "reminder-output", EntityID: alarmEntityID},
+		{RequirementID: "reminder-output", EntityID: buzzerEntityID},
 		{RequirementID: "compartments", EntityID: c1},
 		{RequirementID: "compartments", EntityID: c2},
 		{RequirementID: "compartments", EntityID: c3},
@@ -384,13 +384,23 @@ func TestWindowReminderEffect(t *testing.T) {
 		}
 	}
 	if gotRequest == nil {
-		t.Fatal("expected a RequestCommand(alarm) effect")
+		t.Fatal("expected a RequestCommand(buzzer) effect")
 	}
-	if gotRequest.EntityID != alarmEntityID {
-		t.Fatalf("request entity = %q, want %q", gotRequest.EntityID, alarmEntityID)
+	if gotRequest.EntityID != buzzerEntityID {
+		t.Fatalf("request entity = %q, want %q", gotRequest.EntityID, buzzerEntityID)
 	}
-	if gotRequest.Action != "trigger" {
-		t.Fatalf("action = %q, want trigger", gotRequest.Action)
+	if gotRequest.Action != "buzzer" {
+		t.Fatalf("action = %q, want buzzer", gotRequest.Action)
+	}
+	var args struct {
+		Freq     int `json:"freq"`
+		Duration int `json:"duration"`
+	}
+	if err := json.Unmarshal([]byte(gotRequest.ArgsJSON), &args); err != nil {
+		t.Fatalf("buzzer args %q: %v", gotRequest.ArgsJSON, err)
+	}
+	if args.Freq != defaultReminder.Freq || args.Duration != defaultReminder.Duration {
+		t.Fatalf("buzzer args = %+v, want default reminder policy %+v", args, defaultReminder)
 	}
 	if gotRequest.IdempotencyKey != "reminder-win-1" {
 		t.Fatalf("idempotency = %q, want reminder-win-1", gotRequest.IdempotencyKey)
@@ -403,7 +413,7 @@ func TestWindowReminderEffect(t *testing.T) {
 	}
 }
 
-func TestContactCompletesWindow(t *testing.T) {
+func TestKeyPressCompletesWindow(t *testing.T) {
 	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC))
 	defer a.close()
 	a.openStream()
@@ -413,7 +423,7 @@ func TestContactCompletesWindow(t *testing.T) {
 	a.send(2, &application.CapabilityEvent{
 		RequirementID: "compartments",
 		EntityID:      c1,
-		EventType:     "cloudpath.dev/capability/contact@1/opened",
+		EventType:     keyPressEvent,
 		OccurredAt:    "2026-09-03T08:05:00+08:00",
 	})
 	effects := a.waitEffects(2, 60*time.Millisecond)
@@ -480,7 +490,7 @@ func TestDuplicateEventIdempotent(t *testing.T) {
 	a.send(2, &application.ScheduleTick{ScheduleID: "s-1", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON})
 
 	a.send(3, &application.CapabilityEvent{
-		RequirementID: "compartments", EntityID: c1, EventType: "cloudpath.dev/capability/contact@1/opened",
+		RequirementID: "compartments", EntityID: c1, EventType: keyPressEvent,
 		OccurredAt: "2026-09-03T08:05:00+08:00",
 	})
 	after := a.waitEffects(2, 60*time.Millisecond)
@@ -491,13 +501,13 @@ func TestDuplicateEventIdempotent(t *testing.T) {
 		t.Fatalf("window state after complete = %q, want %q", got, windowCompleted)
 	}
 
-	// a duplicate contact event after completion must not re-complete
+	// a duplicate key press after completion must not re-complete
 	a.send(4, &application.CapabilityEvent{
-		RequirementID: "compartments", EntityID: c1, EventType: "cloudpath.dev/capability/contact@1/opened",
+		RequirementID: "compartments", EntityID: c1, EventType: keyPressEvent,
 		OccurredAt: "2026-09-03T08:06:00+08:00",
 	})
 	if dup := a.recvEffects(40 * time.Millisecond); len(dup) != 0 {
-		t.Fatalf("duplicate contact after completion emitted %d effects", len(dup))
+		t.Fatalf("duplicate key press after completion emitted %d effects", len(dup))
 	}
 }
 
@@ -514,7 +524,7 @@ func TestRejectDriverCoupling(t *testing.T) {
 	// impossible to couple to a Driver requirement.
 	for _, r := range desc.Requirements {
 		switch r.Capability {
-		case alarmCap, contactCap, displayCap:
+		case buzzerCap, keyCap, displayCap:
 		default:
 			t.Fatalf("requirement %s uses undeclared capability %s", r.ID, r.Capability)
 		}
@@ -523,7 +533,7 @@ func TestRejectDriverCoupling(t *testing.T) {
 	// Bindings must be for declared capability requirements only; a driver
 	// requirement id is rejected, so the application can never couple to one.
 	resp := a.validate([]application.Binding{
-		{RequirementID: "reminder-output", EntityID: alarmEntityID},
+		{RequirementID: "reminder-output", EntityID: buzzerEntityID},
 		{RequirementID: "compartments", EntityID: c1},
 		{RequirementID: "compartments", EntityID: c2},
 		{RequirementID: "compartments", EntityID: c3},
@@ -564,6 +574,10 @@ func TestInvalidScheduleConfig(t *testing.T) {
 		`{"timezone":"Asia/Shanghai","compartments":[{"id":"c1"},{"id":"c2"},{"id":"c3"}],"schedule":[{"id":"w1","compartment":"c1","start":"25:00","end":"08:30"}]}`,
 		// end before start
 		`{"timezone":"Asia/Shanghai","compartments":[{"id":"c1"},{"id":"c2"},{"id":"c3"}],"schedule":[{"id":"w1","compartment":"c1","start":"08:30","end":"08:00"}]}`,
+		// reminder freq out of buzzer step range
+		`{"timezone":"Asia/Shanghai","compartments":[{"id":"c1"},{"id":"c2"},{"id":"c3"}],"schedule":[{"id":"w1","compartment":"c1","start":"08:00","end":"08:30"}],"reminder":{"freq":10,"duration":1}}`,
+		// reminder duration negative
+		`{"timezone":"Asia/Shanghai","compartments":[{"id":"c1"},{"id":"c2"},{"id":"c3"}],"schedule":[{"id":"w1","compartment":"c1","start":"08:00","end":"08:30"}],"reminder":{"freq":1,"duration":-1}}`,
 		// malformed JSON
 		`{`,
 	}

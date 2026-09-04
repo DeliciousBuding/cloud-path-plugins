@@ -21,14 +21,17 @@
 
 `cloud-path-app-scheduled-compartment` is a **device-agnostic** reference
 Application plugin for CloudPath. It manages a set of compartments against a
-daily schedule: when a schedule window starts it emits a reminder, observes
-contact opened/closed events for each compartment, records a completed or
-missed outcome per window, and keeps everything idempotent.
+daily schedule: when a schedule window starts it emits a reminder, treats a
+key press on a bound compartment entity as the user confirming that
+compartment, records a completed or missed outcome per window, and keeps
+everything idempotent.
 
 The application does **not** depend on any Driver ID, port or vendor field. It
 is expressed purely in terms of standard Capability requirements and stable
 `entity_id` bindings, so the same application can be deployed against any set
-of entities that expose those capabilities.
+of entities that expose those capabilities. Business meaning ("key press =
+medication taken") lives entirely in the application; Drivers only report
+generic hardware facts.
 
 Only the following domain terms are used: **schedule**, **window**,
 **compartment**, **opened**, **completed**, **missed** and **reminder**. No
@@ -65,8 +68,8 @@ industry-specific semantics are hard-coded.
 
 | Requirement ID | Capability | Cardinality | Purpose |
 |---|---|---|---|
-| `reminder-output` | `cloudpath.dev/capability/alarm@1` | one | Emit scheduled reminders |
-| `compartments` | `cloudpath.dev/capability/contact@1` | one-or-more, minimum 3 | Represent and monitor compartments |
+| `reminder-output` | `cloudpath.dev/capability/buzzer@1` | one | Emit scheduled reminders |
+| `compartments` | `cloudpath.dev/capability/key@1` | one-or-more, minimum 3 | Represent and monitor compartments |
 | `local-display` | `cloudpath.dev/capability/display-text@1` | zero-or-one | Optional local status text |
 
 The same declarations live in `requirements.yaml` (human review) and
@@ -90,7 +93,8 @@ window compartment or an invalid time is rejected with a non-OK status.
   ],
   "schedule": [
     {"id": "w-morning", "compartment": "c1", "start": "08:00", "end": "08:30"}
-  ]
+  ],
+  "reminder": {"freq": 1, "duration": 1}
 }
 ```
 
@@ -101,6 +105,9 @@ Field rules:
 - `schedule`: required, at least one window. Each window has a unique non-empty
   `id`, a `compartment` that references a configured compartment, and `start` /
   `end` in 24-hour `HH:MM`. `end` must be strictly after `start`.
+- `reminder`: optional buzzer policy with `freq` and `duration` step levels
+  (0-9 each). Omitted fields default to the quiet minimum (`freq: 1`,
+  `duration: 1`); out-of-range values are rejected.
 
 `ScheduleTick` events carry the concrete runtime window (with RFC3339 `start` /
 `end` timestamps). The app validates that the referenced compartment exists in
@@ -115,14 +122,14 @@ out Driver coupling).
 
 | Requirement ID | Candidate Entity |
 |---|---|
-| `reminder-output` | one alarm-capable Entity |
-| `compartments[0..n]` | contact-capable Entities, at least 3 |
+| `reminder-output` | one buzzer-capable Entity |
+| `compartments[0..n]` | key-capable Entities, at least 3 |
 | `local-display` | an optional display-text-capable Entity |
 
 Bindings persist stable `entity_id` values. Reconnects, Edge restarts and
 Driver restarts must not change a binding. A valid binding is stored so that
-the reminder is routed to the bound alarm entity and contact events are mapped
-back to their compartment.
+the reminder is routed to the bound buzzer entity and key press events are
+mapped back to their compartment.
 
 ## Behavior
 
@@ -130,11 +137,12 @@ The runtime is a process-based `ApplicationService` (Application Protocol v1):
 
 1. **Window start** — on a `ScheduleTick`, the app opens a window, emits a
    `UpsertDomainRecord` (`window`, `state=opened`), a `RequestCommand` to the
-   bound alarm entity, and a `ScheduleTask` so Core can later trigger the
-   `window-check` job.
-2. **Completion** — on a contact `opened`/`closed` event for the compartment
-   while its window is open, the app marks the window `completed` and cancels
-   the `window-check` task.
+   bound buzzer entity (action `buzzer` with the configured freq/duration
+   steps), and a `ScheduleTask` so Core can later trigger the `window-check`
+   job.
+2. **Completion** — on a key `press` event for the compartment while its
+   window is open, the app marks the window `completed` and cancels the
+   `window-check` task.
 3. **Missed** — the `window-check` job scans open windows against the clock and
    records a `window` record with `state=missed`, cancels the task and emits a
    notification.
@@ -179,7 +187,7 @@ go test ./... -count=20   # idempotency / flake soak
 ```
 
 The suite covers the descriptor requirements, config/binding validation, the
-window reminder effect, contact-driven completion, missed-window recording,
+window reminder effect, key-press-driven completion, missed-window recording,
 duplicate-event idempotency, rejection of driver coupling, invalid config,
 graceful shutdown, and manifest identity / requirements drift.
 
