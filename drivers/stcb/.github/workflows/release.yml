@@ -15,28 +15,26 @@ jobs:
         include:
           - os: linux
             arch: amd64
-            bin: cloudpath-driver-stcb
           - os: linux
             arch: arm64
-            bin: cloudpath-driver-stcb
           - os: windows
             arch: amd64
-            bin: cloudpath-driver-stcb.exe
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
-      - name: Build
+      - name: Build + checksum
         env:
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
         run: |
           mkdir -p dist
-          go build -trimpath -o dist/${{ matrix.bin }} ./cmd/cloudpath-driver-stcb
-      - name: checksum
-        run: sha256sum dist/${{ matrix.bin }} > dist/${{ matrix.bin }}.sha256
+          bin="cloudpath-driver-stcb_${{ github.ref_name }}_${{ matrix.os }}_${{ matrix.arch }}"
+          if [ "${{ matrix.os }}" = "windows" ]; then bin="$bin.exe"; fi
+          go build -trimpath -o "dist/$bin" ./cmd/cloudpath-driver-stcb
+          sha256sum "dist/$bin" > "dist/$bin.sha256"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}-${{ matrix.arch }}
