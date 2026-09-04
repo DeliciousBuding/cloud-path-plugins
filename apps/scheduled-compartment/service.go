@@ -18,7 +18,7 @@ import (
 // examples/scheduled-compartment/plugin.yaml.
 const (
 	pluginIDValue   = "io.github.deliciousbuding.cloud-path-app-scheduled-compartment"
-	pluginVersion   = "0.2.1"
+	pluginVersion   = "0.2.2"
 	jobWindowCheck  = "window-check"
 	windowCheckCron = "* * * * *"
 	buzzerAction    = "buzzer"
@@ -80,10 +80,14 @@ type Service struct {
 	mu          sync.Mutex
 	initialized bool
 	closed      bool
-	writer      application.ApplicationEffectWriter
-	effectSeq   uint64
-	now         func() time.Time
-	instances   map[string]*instanceState
+	// writers 按实例路由 effect：共享进程里每个 App 实例有独立的 RPC 会话
+	// （AppHost 的 appruntime 每实例一条 HandleEvents 流），effect 必须回到
+	// 发起事件的那条流，否则对端按「实例不匹配」拒绝（2026-09-05 真板实测：
+	// 两个实例同进程，后开的流覆盖全局 writer，先开实例的 effect 全被拒）。
+	writers   map[string]application.ApplicationEffectWriter
+	effectSeq uint64
+	now       func() time.Time
+	instances map[string]*instanceState
 }
 
 var _ application.ApplicationServer = (*Service)(nil)
@@ -211,16 +215,20 @@ func (s *Service) ValidateBinding(_ context.Context, req *application.ValidateBi
 
 // HandleEvents is the bidi event/effect stream. Core sends events here and the
 // plugin emits Core-approved effects back over the same stream.
+//
+// 共享进程多实例：appruntime 为每个实例开独立的 HandleEvents 会话，事件
+// 到达时把该实例登记到本流，effect 由此路由回正确的流。
 func (s *Service) HandleEvents(ctx context.Context, events application.ApplicationEventReader, effects application.ApplicationEffectWriter) error {
 	if events == nil {
 		return status.Errorf(status.CodeInvalidArgument, "nil event reader")
 	}
-	s.mu.Lock()
-	s.writer = effects
-	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
-		s.writer = nil
+		for id, w := range s.writers {
+			if w == effects {
+				delete(s.writers, id)
+			}
+		}
 		s.mu.Unlock()
 	}()
 
@@ -231,6 +239,14 @@ func (s *Service) HandleEvents(ctx context.Context, events application.Applicati
 				return nil
 			}
 			return err
+		}
+		if ev != nil && ev.PluginInstanceID != "" {
+			s.mu.Lock()
+			if s.writers == nil {
+				s.writers = map[string]application.ApplicationEffectWriter{}
+			}
+			s.writers[ev.PluginInstanceID] = effects
+			s.mu.Unlock()
 		}
 		if err := s.handleEvent(ev); err != nil {
 			return err
@@ -395,7 +411,7 @@ func (s *Service) flush(instanceID string, effects []application.ApplicationEffe
 
 func (s *Service) sendEffect(instanceID string, union application.ApplicationEffectUnion) error {
 	s.mu.Lock()
-	writer := s.writer
+	writer := s.writers[instanceID]
 	if s.closed {
 		s.mu.Unlock()
 		return status.Errorf(status.CodeUnavailable, "plugin is shutting down")
@@ -404,7 +420,7 @@ func (s *Service) sendEffect(instanceID string, union application.ApplicationEff
 	seq := s.effectSeq
 	s.mu.Unlock()
 	if writer == nil {
-		return nil // no active stream; nothing to emit
+		return nil // no active stream for this instance; nothing to emit
 	}
 	eff := &application.ApplicationEffect{
 		PluginInstanceID: instanceID,

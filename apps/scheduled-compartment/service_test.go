@@ -261,7 +261,7 @@ func TestDescriptorRequirements(t *testing.T) {
 	if desc.ApplicationID != "io.github.deliciousbuding.cloud-path-app-scheduled-compartment" {
 		t.Fatalf("application id = %q", desc.ApplicationID)
 	}
-	if desc.Version != "0.2.1" {
+	if desc.Version != "0.2.2" {
 		t.Fatalf("version = %q", desc.Version)
 	}
 	if desc.DeclarativeOnly {
@@ -471,6 +471,66 @@ func TestRequestCompletedRecordsReminderOutcome(t *testing.T) {
 	})
 	if effects := a.recvEffects(60 * time.Millisecond); len(effects) != 0 {
 		t.Fatalf("未知 RequestID 不得产生 effect: %+v", effects)
+	}
+}
+
+// TestMultiInstanceEffectRouting 锁定共享进程多实例的 effect 路由：
+// 每个实例的 HandleEvents 会话独立，实例 A 的 effect 必须回到 A 的流、
+// B 的回到 B 的流。全局单 writer 会让后开的流劫持所有 effect，对端按
+// 「实例不匹配」拒绝（2026-09-05 真板实测：双实例 faults 全部 effect 被拒）。
+func TestMultiInstanceEffectRouting(t *testing.T) {
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC))
+	defer a.close()
+	a.openStream() // 实例 app-1 的流
+
+	// 实例 app-2：同一 Service（共享进程）、独立会话
+	const inst2 = "app-2"
+	if _, err := a.cli.ConfigureInstance(a.ctx, &application.ConfigureInstanceRequest{
+		PluginInstanceID: inst2, Config: []byte(validConfigJSON), ConfigRevision: 1,
+	}); err != nil {
+		t.Fatalf("configure app-2: %v", err)
+	}
+	if _, err := a.cli.ValidateBinding(a.ctx, &application.ValidateBindingRequest{
+		PluginInstanceID: inst2, Bindings: validBindings,
+	}); err != nil {
+		t.Fatalf("validate app-2: %v", err)
+	}
+	stream2, err := a.cli.HandleEvents(a.ctx)
+	if err != nil {
+		t.Fatalf("open stream for app-2: %v", err)
+	}
+
+	// app-2 的窗口 tick（先发，制造「后开的流」）
+	if err := stream2.Send(a.ctx, &application.ApplicationEvent{
+		PluginInstanceID: inst2, Sequence: 1, SchemaVersion: "1",
+		Union: &application.ScheduleTick{ScheduleID: "s-2", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON},
+	}); err != nil {
+		t.Fatalf("send app-2 tick: %v", err)
+	}
+	// app-1 的窗口 tick
+	a.send(1, &application.ScheduleTick{ScheduleID: "s-1", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON})
+
+	// app-1 的 3 个 effect 必须全部带 PluginInstanceID=app-1 且到 app-1 的流
+	effects1 := a.waitEffects(3, 60*time.Millisecond)
+	for _, e := range effects1 {
+		if e.PluginInstanceID != testInstance {
+			t.Fatalf("app-1 流收到实例 %q 的 effect（路由串流）", e.PluginInstanceID)
+		}
+	}
+	// app-2 的 3 个 effect 必须在 stream2 上（各自的 Recv 语义同 recvEffects）
+	var effects2 []*application.ApplicationEffect
+	deadline := time.Now().Add(5 * time.Second)
+	for len(effects2) < 3 {
+		rctx, cancel := context.WithTimeout(a.ctx, time.Until(deadline))
+		eff, err := stream2.Recv(rctx)
+		cancel()
+		if err != nil {
+			t.Fatalf("recv app-2 effect (%d/3): %v", len(effects2), err)
+		}
+		if eff.PluginInstanceID != inst2 {
+			t.Fatalf("app-2 流收到实例 %q 的 effect（路由串流）", eff.PluginInstanceID)
+		}
+		effects2 = append(effects2, eff)
 	}
 }
 
