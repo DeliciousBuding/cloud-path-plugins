@@ -1,5 +1,5 @@
-github.com/DeliciousBuding/cloud-path v0.1.0 h1:wYYXhKyCKVIvQSCbOT68PGNY28B4DSJ6RziC6lEamOI=
-github.com/DeliciousBuding/cloud-path v0.1.0/go.mod h1:Y7v5vDys0RQuFhgDInISiqJ7PI20trd4FMPqKzGPCNk=
+github.com/DeliciousBuding/cloud-path v0.1.1-0.20260904094033-9047f37b30d3 h1:a0TIVPj8UErJHKVcbvGmmIzTh08T+Nr7Z1MhEAEqIDk=
+github.com/DeliciousBuding/cloud-path v0.1.1-0.20260904094033-9047f37b30d3/go.mod h1:Y7v5vDys0RQuFhgDInISiqJ7PI20trd4FMPqKzGPCNk=
 go.bug.st/serial v1.8.0 h1:ZtnmN8aYXtPlTghwSvDWPHKBHL9TM6oFDa+KpSn4SQE=
 go.bug.st/serial v1.8.0/go.mod h1:d0MmS16Qt9b1m06yoYRNUXhRRTJV5Qg2S5EKqQtnayQ=
 golang.org/x/sys v0.47.0 h1:o7XGOvZQCADBQQ4Y7VNq2dRWQR7JmOUW8Kxx4ZsNgWs=

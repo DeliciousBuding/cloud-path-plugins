@@ -15,9 +15,6 @@ func TestEncodeCommand(t *testing.T) {
 		args   string
 		want   string
 	}{
-		{"dump", "", "S"},
-		{"trigger", "", "R"},
-		{"open", "", "O"},
 		{"isp", "", "D"},
 		{"sensor", "", "V"},
 		{"buzzer", `{"freq":4,"duration":3}`, "B43"},
@@ -50,6 +47,16 @@ func TestEncodeCommandInvalid(t *testing.T) {
 	if _, err := encodeCommand("sync", "bad"); err == nil {
 		t.Fatal("expected reject malformed sync args")
 	}
+	// 'D' 在板上是 ISP 下载模式：legacy 编码器绝不能把诊断命令编成 'D'。
+	if _, err := encodeCommand("diag", ""); err == nil {
+		t.Fatal("expected legacy diag to be rejected (ISP footgun)")
+	}
+	// 药盒业务动词不属于硬件 Driver。
+	for _, business := range []string{"dump", "trigger", "open"} {
+		if _, err := encodeCommand(business, ""); err == nil {
+			t.Fatalf("expected business action %q to be rejected", business)
+		}
+	}
 }
 
 func TestSyncEncodesCurrentTime(t *testing.T) {
@@ -71,11 +78,11 @@ func TestDescribeStable(t *testing.T) {
 	if desc.DriverID != "stcb" {
 		t.Fatalf("DriverID = %q", desc.DriverID)
 	}
-	if desc.Version != "0.1.0" {
+	if desc.Version != "0.2.0" {
 		t.Fatalf("Version = %q", desc.Version)
 	}
-	if len(desc.Capabilities) != 12 {
-		t.Fatalf("capabilities = %d, want 12", len(desc.Capabilities))
+	if len(desc.Capabilities) != 13 {
+		t.Fatalf("capabilities = %d, want 13", len(desc.Capabilities))
 	}
 }
 
@@ -108,7 +115,7 @@ func TestExecuteRejectsUnknownAction(t *testing.T) {
 func TestExecuteRequiresOpenDevice(t *testing.T) {
 	d := New()
 	resp, err := d.Execute(context.Background(), &driver.ExecuteRequest{
-		IdempotencyKey: "k1", Action: "dump",
+		IdempotencyKey: "k1", Action: "sensor",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -150,7 +157,7 @@ func TestManifestConsistency(t *testing.T) {
 			t.Fatalf("plugin.yaml missing %q", c)
 		}
 	}
-	for _, cap := range []string{capClock, capAlarm, capContact, capTemp, capIllum, capHall, capVib, capKey, capBuzzer, capLED, capDisplay, capMotor} {
+	for _, cap := range []string{capClock, capTemp, capIllum, capAnalog, capNav, capHall, capVib, capKey, capBuzzer, capLED, capDisplay, capMotor, capDiag} {
 		if !strings.Contains(s, cap) {
 			t.Fatalf("plugin.yaml missing capability %q", cap)
 		}

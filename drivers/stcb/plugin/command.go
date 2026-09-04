@@ -12,18 +12,16 @@ const (
 	actionDisplay = "display"
 	actionMotor   = "motor"
 	actionSensor  = "sensor"
-	actionDump    = "dump"
 	actionSync    = "sync"
-	actionTrigger = "trigger"
-	actionOpen    = "open"
 	actionISP     = "isp"
 	actionRaw     = "raw"
+	actionDiag    = "diag"
 )
 
 // supportedActions 是 Execute 支持的全部 action 白名单（唯一事实源）。
 var supportedActions = []string{
 	actionBuzzer, actionLED, actionDisplay, actionMotor,
-	actionSensor, actionDump, actionSync, actionTrigger, actionOpen, actionISP, actionRaw,
+	actionSensor, actionSync, actionDiag, actionISP, actionRaw,
 }
 
 // slowActions 是需要逐字节慢发的命令：固件 UART 命令缓冲仅 1 字节，快发会丢字节。
@@ -39,16 +37,13 @@ var slowActions = map[string]bool{
 // 返回的帧只含命令字节，不含换行（换行由 write 层按需追加）。
 func encodeCommand(action, argsJSON string) ([]byte, error) {
 	switch action {
-	case actionDump:
-		return []byte("S"), nil
-	case actionTrigger:
-		return []byte("R"), nil
-	case actionOpen:
-		return []byte("O"), nil
 	case actionISP:
 		return []byte("D"), nil
 	case actionSensor:
 		return []byte("V"), nil
+	case actionDiag:
+		// 'D' 在板上是 ISP 下载模式，绝不能被诊断命令误触发；诊断只存在于 Protocol v1。
+		return nil, fmt.Errorf("stcb: diag 需要 Protocol v1 固件（CMD:<id>:diag）")
 	case actionBuzzer:
 		return encodeBuzzer(argsJSON)
 	case actionLED:
@@ -180,12 +175,6 @@ func validHHMM(s string) bool {
 // wireByte 返回命令对应的固件单字节命令（仅用于结果摘要可读性）。
 func wireByte(action string) string {
 	switch action {
-	case actionDump:
-		return "S"
-	case actionTrigger:
-		return "R"
-	case actionOpen:
-		return "O"
 	case actionISP:
 		return "D"
 	case actionBuzzer:

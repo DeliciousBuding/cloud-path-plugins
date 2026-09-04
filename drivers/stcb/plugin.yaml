@@ -9,11 +9,11 @@
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Driver
 id: io.github.deliciousbuding.cloud-path-driver-stcb
-version: 0.1.0
+version: 0.2.0
 protocol: 1
 entrypoint: cloudpath-driver-stcb
 compatibility:
-  core: ">=0.1.0 <0.2.0"
+  core: ">=0.2.0 <0.3.0"
 permissions:
   # The adapter only opens a serial port; the list must stay identical with
   # what the driver actually uses and must never grow silently in a patch.
@@ -23,10 +23,10 @@ permissions:
   secrets: []
 capabilities:
   - cloudpath.dev/capability/clock@1
-  - cloudpath.dev/capability/alarm@1
-  - cloudpath.dev/capability/contact@1
   - cloudpath.dev/capability/temperature@1
   - cloudpath.dev/capability/illuminance@1
+  - cloudpath.dev/capability/analog-input@1
+  - cloudpath.dev/capability/navigation@1
   - cloudpath.dev/capability/hall@1
   - cloudpath.dev/capability/vibration@1
   - cloudpath.dev/capability/key@1
@@ -34,6 +34,7 @@ capabilities:
   - cloudpath.dev/capability/led@1
   - cloudpath.dev/capability/display-text@1
   - cloudpath.dev/capability/motor@1
+  - cloudpath.dev/capability/diagnostics@1
 contributes:
   # The contribution id is stable and distinct from the plugin id; it equals
   # the registered adapter name (Adapter.Name() == "stcb").
