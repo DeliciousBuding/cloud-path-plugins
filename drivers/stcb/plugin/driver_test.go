@@ -78,8 +78,10 @@ func TestDescribeStable(t *testing.T) {
 	if desc.DriverID != "stcb" {
 		t.Fatalf("DriverID = %q", desc.DriverID)
 	}
-	if desc.Version != "0.2.0" {
-		t.Fatalf("Version = %q", desc.Version)
+	// 与 pluginVersion 常量对齐而不是写死字面量：版本号只在 pluginVersion 与
+	// plugin.yaml 两处存在，二者的一致性由 TestManifestConsistency 交叉锁定。
+	if desc.Version != pluginVersion {
+		t.Fatalf("Version = %q, want pluginVersion %q", desc.Version, pluginVersion)
 	}
 	if len(desc.Capabilities) != 13 {
 		t.Fatalf("capabilities = %d, want 13", len(desc.Capabilities))
@@ -148,6 +150,7 @@ func TestManifestConsistency(t *testing.T) {
 	s := string(b)
 	checks := []string{
 		"kind: Driver",
+		"version: " + pluginVersion,
 		"id: io.github.deliciousbuding.cloud-path-driver-stcb",
 		"entrypoint: cloudpath-driver-stcb",
 		"    - id: stcb",
@@ -160,6 +163,21 @@ func TestManifestConsistency(t *testing.T) {
 	for _, cap := range []string{capClock, capTemp, capIllum, capAnalog, capNav, capHall, capVib, capKey, capBuzzer, capLED, capDisplay, capMotor, capDiag} {
 		if !strings.Contains(s, cap) {
 			t.Fatalf("plugin.yaml missing capability %q", cap)
+		}
+	}
+}
+
+// TestBoardDiagnosticsUsesPublisherNamespace 锁定命名空间规则：Driver 专有能力不得占用
+// 平台 cloudpath.dev 词汇。真实事故——Core 参考 demo 适配器也声明
+// cloudpath.dev/capability/diagnostics@1（action 是 dump/noop/ping），Server catalog 按 ID
+// 去重且进程内优先，结果真机设备页丢掉 diag 按钮、反而出现 demo 的动词。
+func TestBoardDiagnosticsUsesPublisherNamespace(t *testing.T) {
+	if !strings.HasPrefix(capDiag, "io.github.deliciousbuding/capability/") {
+		t.Fatalf("板级诊断能力 = %q, 必须用发布者命名空间（不得占用 cloudpath.dev 平台词汇）", capDiag)
+	}
+	for _, c := range capabilityDescriptors() {
+		if c.ID == "cloudpath.dev/capability/diagnostics@1" {
+			t.Fatal("不得再声明 cloudpath.dev/capability/diagnostics@1：会与 Core 参考 demo 适配器冲突")
 		}
 	}
 }

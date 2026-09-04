@@ -16,7 +16,7 @@ import (
 // 稳定身份（一经发布即为机器契约，破坏性语义变化升 @2，不得原地改 @1）。
 const (
 	pluginID      = "io.github.deliciousbuding.cloud-path-driver-stcb"
-	pluginVersion = "0.2.0"
+	pluginVersion = "0.2.1"
 
 	// driverID 是 Describe 上报的稳定 driver 标识，与 plugin.yaml contributes.drivers[0].id 一致。
 	driverID = "stcb"
@@ -37,7 +37,13 @@ const (
 	capMotor   = "cloudpath.dev/capability/motor@1"
 	capAnalog  = "cloudpath.dev/capability/analog-input@1"
 	capNav     = "cloudpath.dev/capability/navigation@1"
-	capDiag    = "cloudpath.dev/capability/diagnostics@1"
+	// capDiag 用**发布者命名空间**而不是 cloudpath.dev：它暴露的是 STC-B 板级原始端口
+	// 电平（P1/P2/P3 + hall_pin/vib_pin），是本 Driver 专有的诊断面，不是平台标准词汇。
+	// 实测教训：平台的参考 demo 适配器也声明 cloudpath.dev/capability/diagnostics@1，
+	// 但 action 集是 dump/noop/ping；Server catalog 按 ID 去重、进程内优先，于是本板的
+	// diag 按钮被 demo 的动词顶掉（真机验证时 /api/capabilities 只返回 dump/noop/ping）。
+	// capability-model.md 的命名空间规则正是为此存在：第三方能力用发布者命名空间。
+	capDiag = "io.github.deliciousbuding/capability/board-diagnostics@1"
 
 	// syncInterval 是 Watch 周期对时（T+HHMM）的间隔。真实板掉电后小时/相位会漂移，
 	// 因此外部 Driver 自己在 Watch 循环内周期对时，不依赖 Core 注入生命周期命令。
@@ -141,7 +147,7 @@ func capabilityDescriptors() []driver.CapabilityDescriptor {
 		{ID: capLED, Title: "LED Bank", Properties: []driver.PropertyDescriptor{{Name: "mask", Type: "integer", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionLED, InputSchemaJSON: mustJSON(ledActionSchema)}}},
 		{ID: capDisplay, Title: "Display", Properties: []driver.PropertyDescriptor{{Name: "mode", Type: "string", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionDisplay, InputSchemaJSON: mustJSON(displayActionSchema)}}},
 		{ID: capMotor, Title: "Motor", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "string", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionMotor, InputSchemaJSON: mustJSON(motorActionSchema)}}},
-		{ID: capDiag, Title: "Diagnostics", Actions: []driver.ActionDescriptor{{Name: "diag", InputSchemaJSON: "{}"}}},
+		{ID: capDiag, Title: "Board Diagnostics", Actions: []driver.ActionDescriptor{{Name: "diag", InputSchemaJSON: "{}"}}},
 	}
 }
 

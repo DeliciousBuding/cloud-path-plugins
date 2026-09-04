@@ -9,7 +9,7 @@
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Driver
 id: io.github.deliciousbuding.cloud-path-driver-stcb
-version: 0.2.0
+version: 0.2.1
 protocol: 1
 entrypoint: cloudpath-driver-stcb
 compatibility:
@@ -34,7 +34,11 @@ capabilities:
   - cloudpath.dev/capability/led@1
   - cloudpath.dev/capability/display-text@1
   - cloudpath.dev/capability/motor@1
-  - cloudpath.dev/capability/diagnostics@1
+  # Publisher namespace on purpose: board-level raw port dump is driver-specific
+  # vocabulary, and reusing cloudpath.dev/capability/diagnostics@1 collides with the
+  # core reference demo adapter (actions dump/noop/ping), which then shadows `diag`
+  # in the server capability catalog. See docs/architecture/capability-model.md.
+  - io.github.deliciousbuding/capability/board-diagnostics@1
 contributes:
   # The contribution id is stable and distinct from the plugin id; it equals
   # the registered adapter name (Adapter.Name() == "stcb").

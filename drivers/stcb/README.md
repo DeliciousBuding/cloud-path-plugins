@@ -59,7 +59,11 @@ Edge 把每台设备的 port/baud/name/protocol 作为 OpenDevice connection hin
 - LED L0-L7：8-bit mask 独立控制；
 - 8-digit display：HH-MM-SS、数字、空白/横线/H/L/小数点字形；
 - Step motor connector；
-- Diagnostics。
+- Board Diagnostics（`io.github.deliciousbuding/capability/board-diagnostics@1`：板级原始端口电平）。
+
+板级诊断用**发布者命名空间**而不是 `cloudpath.dev/capability/diagnostics@1`：Core 的参考 demo
+适配器占用后者且 action 集不同（`dump/noop/ping`），Server catalog 按 ID 去重会把本板的 `diag`
+顶掉。第三方专有词汇走发布者命名空间是 capability-model 的既有规则。
 
 Alarm、compartment、服药时段不属于板载 Driver；这些业务只由 Application Plugin 通过 Capability 组合。
 
@@ -86,7 +90,7 @@ Alarm、compartment、服药时段不属于板载 Driver；这些业务只由 Ap
 
 - plugin id: io.github.deliciousbuding.cloud-path-driver-stcb
 - driver id: stcb
-- version: 0.2.0
+- version: 0.2.1
 - protocol: CloudPath Driver Protocol 1
 - compatibility: CloudPath Core >=0.2.0 <0.3.0
 - permission: hardware [serial]
