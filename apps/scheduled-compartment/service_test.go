@@ -261,7 +261,7 @@ func TestDescriptorRequirements(t *testing.T) {
 	if desc.ApplicationID != "io.github.deliciousbuding.cloud-path-app-scheduled-compartment" {
 		t.Fatalf("application id = %q", desc.ApplicationID)
 	}
-	if desc.Version != "0.2.0" {
+	if desc.Version != "0.2.1" {
 		t.Fatalf("version = %q", desc.Version)
 	}
 	if desc.DeclarativeOnly {
@@ -410,6 +410,67 @@ func TestWindowReminderEffect(t *testing.T) {
 	}
 	if got := windowStateOf(effects, "win-1"); got != windowOpened {
 		t.Fatalf("window state = %q, want %q", got, windowOpened)
+	}
+}
+
+// TestRequestCompletedRecordsReminderOutcome 锁定提醒命令结局的持久化：
+// RequestCompleted（RequestID = 幂等键 reminder-<window>）到达后，窗口记录
+// 携带 reminder_state/reminder_result，而窗口状态机保持不变（仍 opened，
+// 只有按键或 window-check 才改状态）。失败与成功回执都必须落痕。
+func TestRequestCompletedRecordsReminderOutcome(t *testing.T) {
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC))
+	defer a.close()
+	a.openStream()
+	a.send(1, &application.ScheduleTick{ScheduleID: "s-1", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON})
+	_ = a.waitEffects(3, 60*time.Millisecond)
+
+	// 失败回执：设备 ERR（badarg）经 driver→edge→server 最终回到应用。
+	a.now = time.Date(2026, 9, 3, 8, 0, 2, 0, time.UTC)
+	a.send(2, &application.RequestCompleted{
+		RequestID:  "reminder-win-1",
+		EntityID:   buzzerEntityID,
+		Action:     "buzzer",
+		State:      application.CommandStateFailed,
+		ResultJSON: "stcb: device ERR id=7 code=badarg",
+	})
+	effects := a.waitEffects(1, 60*time.Millisecond)
+
+	if got := windowStateOf(effects, "win-1"); got != windowOpened {
+		t.Fatalf("回执不得改窗口状态机: state = %q, want %q", got, windowOpened)
+	}
+	if got, ok := windowFieldOf(effects, "win-1", "reminder_state"); !ok || got != "failed" {
+		t.Fatalf("reminder_state = %v (%t), want failed", got, ok)
+	}
+	if got, ok := windowFieldOf(effects, "win-1", "reminder_result"); !ok || got != "stcb: device ERR id=7 code=badarg" {
+		t.Fatalf("reminder_result = %v (%t), want 原样回执 detail", got, ok)
+	}
+	if got, ok := windowFieldOf(effects, "win-1", "reminder_done_at"); !ok || got == "" {
+		t.Fatalf("reminder_done_at = %v (%t), want 非空时间戳", got, ok)
+	}
+
+	// 成功回执同样落痕（另一窗口）：复用同一实例开第二个窗口验证 succeeded。
+	a.send(3, &application.ScheduleTick{ScheduleID: "s-2", OccurredAt: "2026-09-03T08:10:00+08:00",
+		WindowJSON: `{"id":"win-2","compartment":"c2","start":"2026-09-03T08:10:00+08:00","end":"2026-09-03T08:40:00+08:00"}`})
+	_ = a.waitEffects(3, 60*time.Millisecond)
+	a.send(4, &application.RequestCompleted{
+		RequestID:  "reminder-win-2",
+		EntityID:   buzzerEntityID,
+		Action:     "buzzer",
+		State:      application.CommandStateSucceeded,
+		ResultJSON: "device ACK id=8 detail=ok",
+	})
+	effects = a.waitEffects(1, 60*time.Millisecond)
+	if got, ok := windowFieldOf(effects, "win-2", "reminder_state"); !ok || got != "succeeded" {
+		t.Fatalf("win-2 reminder_state = %v (%t), want succeeded", got, ok)
+	}
+
+	// 未知 RequestID（伪回执/跨应用前缀）：幂等忽略，不产生任何 effect。
+	a.send(5, &application.RequestCompleted{
+		RequestID: "other-app-request-1",
+		State:     application.CommandStateFailed,
+	})
+	if effects := a.recvEffects(60 * time.Millisecond); len(effects) != 0 {
+		t.Fatalf("未知 RequestID 不得产生 effect: %+v", effects)
 	}
 }
 
@@ -630,6 +691,23 @@ func windowStateOf(effects []*application.ApplicationEffect, id string) string {
 		}
 	}
 	return ""
+}
+
+// windowFieldOf 提取窗口记录里的任意字段（reminder_state 等）。
+func windowFieldOf(effects []*application.ApplicationEffect, id, field string) (any, bool) {
+	for _, e := range effects {
+		u, ok := e.Union.(*application.UpsertDomainRecord)
+		if !ok || u.RecordType != "window" || u.RecordID != id {
+			continue
+		}
+		var m map[string]any
+		if json.Unmarshal([]byte(u.DataJSON), &m) != nil {
+			continue
+		}
+		v, ok := m[field]
+		return v, ok
+	}
+	return nil, false
 }
 
 func countRequestCommand(effects []*application.ApplicationEffect) int {

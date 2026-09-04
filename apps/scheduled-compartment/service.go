@@ -18,7 +18,7 @@ import (
 // examples/scheduled-compartment/plugin.yaml.
 const (
 	pluginIDValue   = "io.github.deliciousbuding.cloud-path-app-scheduled-compartment"
-	pluginVersion   = "0.2.0"
+	pluginVersion   = "0.2.1"
 	jobWindowCheck  = "window-check"
 	windowCheckCron = "* * * * *"
 	buzzerAction    = "buzzer"
@@ -50,6 +50,12 @@ type windowTrack struct {
 	OpenedAt       time.Time
 	ClosedAt       time.Time
 	ReminderEntity string
+	// 提醒命令的最终回执（RequestCompleted）。空 = 尚无最终回执；
+	// 状态机不受它影响（只有按键完成窗口、窗口结束判 missed），
+	// 但它让 missed 可区分「用户未响应」与「提醒从未送达设备」。
+	ReminderState  string
+	ReminderResult string
+	ReminderDoneAt time.Time
 }
 
 // instanceState is the per-plugin-instance runtime state.
@@ -339,13 +345,44 @@ func (s *Service) onKeyEvent(instanceID string, ev *application.CapabilityEvent)
 	return s.flush(instanceID, effects)
 }
 
-func (s *Service) onRequestCompleted(_ string, ev *application.RequestCompleted) error {
-	// RequestCompleted acknowledges the reminder command lifecycle. It does not
-	// change the schedule state machine: only a key press completes a window
-	// and the window-check job records a missed window. It is handled so the
-	// stream stays healthy and is intentionally a no-op for state.
-	_ = ev
-	return nil
+// reminderRequestPrefix 是提醒命令的幂等键前缀（windowStartEffects 生成，
+// AppHost 原样回传为 RequestCompleted.RequestID），用于把回执关联回窗口。
+const reminderRequestPrefix = "reminder-"
+
+func (s *Service) onRequestCompleted(instanceID string, ev *application.RequestCompleted) error {
+	// RequestCompleted 关闭提醒命令生命周期。状态机不受影响：只有按键
+	// 完成窗口、window-check job 判 missed——但命令结局必须持久化到窗口
+	// 记录，否则 missed 无法区分「用户未响应」与「提醒从未送达设备」。
+	if ev == nil || !strings.HasPrefix(ev.RequestID, reminderRequestPrefix) {
+		return nil
+	}
+	var reminderState string
+	switch ev.State {
+	case application.CommandStateSucceeded:
+		reminderState = "succeeded"
+	case application.CommandStateFailed:
+		reminderState = "failed"
+	case application.CommandStateTimedOut:
+		reminderState = "timedout"
+	default:
+		return nil // 中间态不出现在 RequestCompleted；窗口记录保持不变
+	}
+	windowID := strings.TrimPrefix(ev.RequestID, reminderRequestPrefix)
+
+	s.mu.Lock()
+	st := s.instance(instanceID)
+	w := st.windows[windowID]
+	if w == nil {
+		s.mu.Unlock()
+		return nil // 未知窗口（已重启丢失或伪 RequestID）：幂等忽略
+	}
+	w.ReminderState = reminderState
+	w.ReminderResult = ev.ResultJSON
+	w.ReminderDoneAt = s.now()
+	effects := []application.ApplicationEffectUnion{windowRecord(w)}
+	s.mu.Unlock()
+
+	return s.flush(instanceID, effects)
 }
 func (s *Service) flush(instanceID string, effects []application.ApplicationEffectUnion) error {
 	for _, u := range effects {
@@ -711,14 +748,17 @@ func parseOccurred(s string) time.Time {
 
 func windowRecord(w *windowTrack) *application.UpsertDomainRecord {
 	data := map[string]any{
-		"id":              w.ID,
-		"compartment":     w.Compartment,
-		"start":           w.Start.UTC().Format(time.RFC3339),
-		"end":             w.End.UTC().Format(time.RFC3339),
-		"state":           w.State,
-		"opened_at":       optTime(w.OpenedAt),
-		"closed_at":       optTime(w.ClosedAt),
-		"reminder_entity": w.ReminderEntity,
+		"id":               w.ID,
+		"compartment":      w.Compartment,
+		"start":            w.Start.UTC().Format(time.RFC3339),
+		"end":              w.End.UTC().Format(time.RFC3339),
+		"state":            w.State,
+		"opened_at":        optTime(w.OpenedAt),
+		"closed_at":        optTime(w.ClosedAt),
+		"reminder_entity":  w.ReminderEntity,
+		"reminder_state":   w.ReminderState,
+		"reminder_result":  w.ReminderResult,
+		"reminder_done_at": optTime(w.ReminderDoneAt),
 	}
 	return &application.UpsertDomainRecord{
 		RecordType: "window",
