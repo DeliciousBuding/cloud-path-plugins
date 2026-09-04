@@ -1,12 +1,11 @@
 # CloudPath Driver Plugin manifest (v1alpha1).
 # Shape follows spec/plugin-manifest.schema.json in the cloud-path core repo.
 #
-# Incubation status: inside the monorepo this directory (examples/stcb) is the
-# in-process reference adapter consumed by cloud-path-edge/server through a
-# blank import. This file freezes the machine contract for the independent
-# repository split (cloud-path-driver-stcb): the process entrypoint and the
-# Driver Protocol v1 implementation are produced at split time. Once published,
-# every field below is stable for the lifetime of this schema version.
+# Incubation status: this repository is the independent Driver Plugin formerly
+# known as examples/stcb inside the cloud-path monorepo. Core production binaries
+# no longer blank-import STC-B; the driver is installed from GitHub and run by the
+# Edge Plugin Host. Once published, every field below is stable for the lifetime
+# of this schema version.
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Driver
 id: io.github.deliciousbuding.cloud-path-driver-stcb
