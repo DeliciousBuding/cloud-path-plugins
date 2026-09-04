@@ -1,0 +1,7 @@
+{
+  "device_id": "stcb-1",
+  "name": "STC-B Board",
+  "port": "COM3",
+  "baud": 9600,
+  "poll_interval_s": 5
+}

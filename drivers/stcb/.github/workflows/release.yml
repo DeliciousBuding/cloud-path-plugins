@@ -1,0 +1,61 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            bin: cloudpath-driver-stcb
+          - os: linux
+            arch: arm64
+            bin: cloudpath-driver-stcb
+          - os: windows
+            arch: amd64
+            bin: cloudpath-driver-stcb.exe
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - name: Build
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          mkdir -p dist
+          go build -trimpath -o dist/${{ matrix.bin }} ./cmd/cloudpath-driver-stcb
+      - name: checksum
+        run: sha256sum dist/${{ matrix.bin }} > dist/${{ matrix.bin }}.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-${{ matrix.arch }}
+          path: dist
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: List assets
+        run: ls -la release-assets
+      - name: Write manifest into release
+        run: cp plugin.yaml release-assets/plugin.yaml
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          files: release-assets/*
+          fail_on_unmatched_files: true

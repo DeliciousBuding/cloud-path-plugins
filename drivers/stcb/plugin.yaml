@@ -1,0 +1,44 @@
+# CloudPath Driver Plugin manifest (v1alpha1).
+# Shape follows spec/plugin-manifest.schema.json in the cloud-path core repo.
+#
+# Incubation status: inside the monorepo this directory (examples/stcb) is the
+# in-process reference adapter consumed by cloud-path-edge/server through a
+# blank import. This file freezes the machine contract for the independent
+# repository split (cloud-path-driver-stcb): the process entrypoint and the
+# Driver Protocol v1 implementation are produced at split time. Once published,
+# every field below is stable for the lifetime of this schema version.
+apiVersion: plugins.cloudpath.dev/v1alpha1
+kind: Driver
+id: io.github.deliciousbuding.cloud-path-driver-stcb
+version: 0.1.0
+protocol: 1
+entrypoint: cloudpath-driver-stcb
+compatibility:
+  core: ">=0.1.0 <0.2.0"
+permissions:
+  # The adapter only opens a serial port; the list must stay identical with
+  # what the driver actually uses and must never grow silently in a patch.
+  hardware: [serial]
+  network: []
+  filesystem: []
+  secrets: []
+capabilities:
+  - cloudpath.dev/capability/clock@1
+  - cloudpath.dev/capability/alarm@1
+  - cloudpath.dev/capability/contact@1
+  - cloudpath.dev/capability/temperature@1
+  - cloudpath.dev/capability/illuminance@1
+  - cloudpath.dev/capability/hall@1
+  - cloudpath.dev/capability/vibration@1
+  - cloudpath.dev/capability/key@1
+  - cloudpath.dev/capability/buzzer@1
+  - cloudpath.dev/capability/led@1
+  - cloudpath.dev/capability/display-text@1
+  - cloudpath.dev/capability/motor@1
+contributes:
+  # The contribution id is stable and distinct from the plugin id; it equals
+  # the registered adapter name (Adapter.Name() == "stcb").
+  drivers:
+    - id: stcb
+      title: STC-B Driver
+      discovery: manual
