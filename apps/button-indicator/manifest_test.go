@@ -94,7 +94,9 @@ func TestDescribeReportsRequirements(t *testing.T) {
 	for _, j := range desc.Jobs {
 		jobIDs[j.ID] = true
 	}
-	if !jobIDs[jobBootstrap] || !jobIDs[jobHeartbeat] {
-		t.Fatalf("descriptor jobs missing bootstrap/heartbeat: %+v", desc.Jobs)
+	// descriptor 只声明 bootstrap：indicator-heartbeat 归 Durable Scheduler
+	// 独占驱动（声明两处会双派发）
+	if !jobIDs[jobBootstrap] || jobIDs[jobHeartbeat] {
+		t.Fatalf("descriptor jobs must be bootstrap-only: %+v", desc.Jobs)
 	}
 }

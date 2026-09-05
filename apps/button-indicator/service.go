@@ -26,7 +26,7 @@ import (
 // Manifest identity. These must mirror plugin.yaml.
 const (
 	pluginIDValue = "io.github.deliciousbuding.cloud-path-app-button-indicator"
-	pluginVersion = "0.1.1"
+	pluginVersion = "0.1.2"
 
 	jobBootstrap  = "bootstrap"
 	jobHeartbeat  = "indicator-heartbeat"
@@ -138,7 +138,10 @@ func (s *Service) Initialize(_ context.Context, req *application.InitializeReque
 // Describe reports the capability requirements and jobs. The bootstrap job is
 // the bridge that registers the declarative heartbeat: the AppHost drives
 // descriptor jobs every minute, and bootstrap (re)declares the schedule_task
-// effect only when the config revision changes.
+// effect only when the config revision changes. indicator-heartbeat is
+// deliberately NOT declared here — declaring it would make the AppHost's
+// minute loop dispatch it in addition to the Durable Scheduler (double
+// drive); the heartbeat job is owned exclusively by the cron scheduler.
 func (s *Service) Describe(context.Context) (*application.ApplicationDescriptor, error) {
 	return &application.ApplicationDescriptor{
 		ApplicationID:  s.pluginID,
@@ -151,7 +154,6 @@ func (s *Service) Describe(context.Context) (*application.ApplicationDescriptor,
 		},
 		Jobs: []application.JobDescriptor{
 			{ID: jobBootstrap, Title: "Register declarative schedules", InputSchemaJSON: "{}"},
-			{ID: jobHeartbeat, Title: "Heartbeat (scheduled)", InputSchemaJSON: "{}"},
 		},
 		DeclarativeOnly: false,
 	}, nil
