@@ -5,6 +5,13 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	// Embed the IANA timezone database so timezone names (e.g. "Asia/Shanghai")
+	// resolve on every host. The release binary is built on linux CI and runs
+	// on Windows where no system zoneinfo exists — without this import the
+	// config validation rejects every non-UTC timezone (2026-09-05 D3 real-
+	// board run: "Asia/Shanghai is not a valid IANA name").
+	_ "time/tzdata"
 )
 
 // Config is the bounded instance configuration for the Button Indicator
