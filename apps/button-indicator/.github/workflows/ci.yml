@@ -1,0 +1,49 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: build / vet / test / gofmt / manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.3'
+          cache: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -count=1
+
+      - name: gofmt gate
+        run: test -z "$(gofmt -l .)"
+
+      - name: No core internal imports
+        run: |
+          if grep -R "github.com/DeliciousBuding/cloud-path/internal" --include="*.go" .; then
+            echo "plugin must only depend on the public SDK"; exit 1
+          fi
+
+      - name: Manifest validator self-test
+        run: python scripts/validate_manifest.py --self-test
+
+      - name: Manifest gate
+        run: python scripts/validate_manifest.py plugin.yaml --dir .

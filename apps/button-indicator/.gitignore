@@ -1,0 +1,20 @@
+# Build artifacts
+/dist/
+/bin/
+*.exe
+*.test
+*.out
+
+# Local runtime state created when the plugin is exercised by a Host
+/data/
+/plugins.d/
+plugins.lock
+*.log
+
+# Local private layer / editor noise
+.local/
+.env
+.env.*
+.idea/
+.vscode/
+.DS_Store

@@ -1,0 +1,15 @@
+# Capability requirements for Button Indicator.
+# Kept alongside plugin.yaml for human review; plugin.yaml is the machine manifest.
+# The application is implemented as a process-based Application Protocol v1 service
+# in cmd/cloud-path-app-button-indicator.
+requirements:
+  - id: button-input
+    capability: cloudpath.dev/capability/key@1
+    cardinality: one-or-more
+    minItems: 1
+  - id: indicator
+    capability: cloudpath.dev/capability/led@1
+    cardinality: one
+  - id: sound
+    capability: cloudpath.dev/capability/buzzer@1
+    cardinality: zero-or-one
