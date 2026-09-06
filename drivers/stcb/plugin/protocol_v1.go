@@ -163,8 +163,11 @@ func ParseDiagnostic(line string) (map[string]string, bool) {
 }
 
 func encodeV1Command(id, action, argsJSON string) ([]byte, error) {
-	if id == "" || strings.ContainsAny(id, ":\r\n") {
+	if id == "" || strings.ContainsAny(id, ":\r\n\x00") {
 		return nil, fmt.Errorf("stcb: invalid command id")
+	}
+	if err := validateActionArgs(action, argsJSON); err != nil {
+		return nil, err
 	}
 	verb, args := action, ""
 	switch action {
@@ -271,8 +274,14 @@ func encodeV1Command(id, action, argsJSON string) ([]byte, error) {
 				return nil, fmt.Errorf("stcb: sync args: %w", err)
 			}
 			if a.Time != "" {
+				if !validHHMMSS(a.Time) {
+					return nil, fmt.Errorf("stcb: sync time must be HHMMSS (000000-235959)")
+				}
 				args = "time=" + a.Time
 			} else if a.HHMM != "" {
+				if !validHHMM(a.HHMM) {
+					return nil, fmt.Errorf("stcb: sync hhmm must be HHMM (0000-2359)")
+				}
 				args = "hhmm=" + a.HHMM
 			}
 		}

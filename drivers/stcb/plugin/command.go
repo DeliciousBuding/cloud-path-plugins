@@ -3,6 +3,7 @@ package plugin
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // 执行器命令 key（Capability action 键 == 命令白名单命令名）。
@@ -36,6 +37,9 @@ var slowActions = map[string]bool{
 // encodeCommand 把 action + argsJSON 编码为线协议字节帧。
 // 返回的帧只含命令字节，不含换行（换行由 write 层按需追加）。
 func encodeCommand(action, argsJSON string) ([]byte, error) {
+	if err := validateActionArgs(action, argsJSON); err != nil {
+		return nil, err
+	}
 	switch action {
 	case actionISP:
 		return []byte("D"), nil
@@ -61,6 +65,54 @@ func encodeCommand(action, argsJSON string) ([]byte, error) {
 	}
 }
 
+// validateActionArgs enforces the existing required/oneOf declarations before
+// either protocol can produce UART bytes. Value types/ranges stay in the encoders.
+func validateActionArgs(action, argsJSON string) error {
+	var required, choices []string
+	switch action {
+	case actionBuzzer:
+		required = []string{"freq", "duration"}
+	case actionMotor:
+		required = []string{"steps"}
+	case actionLED:
+		choices = []string{"mask", "pattern"}
+	case actionDisplay:
+		choices = []string{"digits", "codes", "mode"}
+	default:
+		return nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(argsJSON), &fields); err != nil {
+		return fmt.Errorf("stcb: %s args must be a JSON object: %w", action, err)
+	}
+	if fields == nil {
+		return fmt.Errorf("stcb: %s args must be a JSON object", action)
+	}
+	for _, key := range required {
+		value, ok := fields[key]
+		if !ok || strings.TrimSpace(string(value)) == "null" {
+			return fmt.Errorf("stcb: %s requires non-null %s", action, key)
+		}
+	}
+	if len(choices) > 0 {
+		selected := ""
+		count := 0
+		for _, key := range choices {
+			if _, ok := fields[key]; ok {
+				selected = key
+				count++
+			}
+		}
+		if count != 1 {
+			return fmt.Errorf("stcb: %s requires exactly one of %s", action, strings.Join(choices, "/"))
+		}
+		if strings.TrimSpace(string(fields[selected])) == "null" {
+			return fmt.Errorf("stcb: %s %s cannot be null", action, selected)
+		}
+	}
+	return nil
+}
+
 func encodeBuzzer(args string) ([]byte, error) {
 	var a struct {
 		Freq     int `json:"freq"`
@@ -80,15 +132,18 @@ func encodeBuzzer(args string) ([]byte, error) {
 
 func encodeLED(args string) ([]byte, error) {
 	var a struct {
-		Pattern int `json:"pattern"`
+		Pattern *int `json:"pattern"`
 	}
 	if err := json.Unmarshal([]byte(args), &a); err != nil {
 		return nil, fmt.Errorf("stcb: led args 须为 JSON 对象（pattern）: %w", err)
 	}
-	if a.Pattern < 0 || a.Pattern > 9 {
-		return nil, fmt.Errorf("stcb: led pattern 档须为 0-9（0=灭 9=全亮），got %d", a.Pattern)
+	if a.Pattern == nil {
+		return nil, fmt.Errorf("stcb: legacy led requires pattern; mask needs Protocol v1")
 	}
-	return []byte{'L', byte('0' + a.Pattern), '0'}, nil
+	if *a.Pattern < 0 || *a.Pattern > 9 {
+		return nil, fmt.Errorf("stcb: led pattern 档须为 0-9（0=灭 9=全亮），got %d", *a.Pattern)
+	}
+	return []byte{'L', byte('0' + *a.Pattern), '0'}, nil
 }
 
 func encodeDisplay(args string) ([]byte, error) {
@@ -155,6 +210,9 @@ func encodeRaw(args string) ([]byte, error) {
 	if a.Args == "" {
 		return nil, fmt.Errorf("stcb: raw 命令需要 args")
 	}
+	if len(a.Args) > 64 || strings.ContainsAny(a.Args, "\r\n\x00") {
+		return nil, fmt.Errorf("stcb: raw args must be <=64 UTF-8 bytes without CR/LF/NUL")
+	}
 	return []byte(a.Args), nil
 }
 
@@ -192,4 +250,8 @@ func wireByte(action string) string {
 	default:
 		return "?"
 	}
+}
+
+func validHHMMSS(s string) bool {
+	return len(s) == 6 && validHHMM(s[:4]) && s[4] >= '0' && s[4] <= '5' && s[5] >= '0' && s[5] <= '9'
 }

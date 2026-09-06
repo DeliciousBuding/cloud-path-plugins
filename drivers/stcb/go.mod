@@ -3,7 +3,7 @@ module github.com/DeliciousBuding/cloud-path-driver-stcb
 go 1.26.3
 
 require (
-	github.com/DeliciousBuding/cloud-path v0.2.0
+	github.com/DeliciousBuding/cloud-path v0.2.13
 	go.bug.st/serial v1.8.0
 )
 

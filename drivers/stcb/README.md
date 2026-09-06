@@ -65,6 +65,10 @@ Edge 把每台设备的 port/baud/name/protocol 作为 OpenDevice connection hin
 适配器占用后者且 action 集不同（`dump/noop/ping`），Server catalog 按 ID 去重会把本板的 `diag`
 顶掉。第三方专有词汇走发布者命名空间是 capability-model 的既有规则。
 
+Capability 的中文标题、动作标题与参数说明由本 Driver 的 Describe 声明；Core / WebUI 只消费声明，
+不维护 STC-B 文案表。完整动作展示元数据需要 Core 0.2.13 或更新版本；旧 Core 仍可使用既有
+动作与参数协议，但可能只显示动作标识。此版本不新增动作，也不为普通执行器臆造破坏性标记。
+
 Alarm、compartment、服药时段不属于板载 Driver；这些业务只由 Application Plugin 通过 Capability 组合。
 
 ## Command truth
@@ -83,6 +87,12 @@ Alarm、compartment、服药时段不属于板载 Driver；这些业务只由 Ap
 - `diag` 只存在于 Protocol v1（`CMD:<id>:diag`）。legacy 单字符 `D` 在板上是 ISP 下载模式，
   Driver 不会把诊断命令编成 `D`（单测锁定）。
 - Legacy `V/B/L/N/T` 只用于旧探针固件 bring-up：没有关联 ACK，Driver 只诚实报告下发与回帧事实。
+- 两种协议都在写 UART 前校验动作声明：`buzzer` 必须同时提供 `freq` / `duration`，`motor` 必须提供
+  `steps`；`led` 的 `mask` / `pattern` 和 `display` 的 `digits` / `codes` / `mode` 分别只能选一种。
+  缺值、`null` 或多个方案会返回错误，显式 `0` 仍合法。Legacy LED 仅支持 `pattern`；`mask` 须使用 v1。
+- v1 `sync.time` 只接受有效 `HHMMSS`，`sync.hhmm` 只接受有效 `HHMM`；两者同时存在时沿用 `time`
+  优先的兼容行为，空参数仍自动北京时间校时。Legacy `raw` 的 JSON 解码结果最多 64 UTF-8 字节，
+  不接受 CR / LF / NUL；这些控制字符也不能进入 v1 命令 ID。
 - 药盒业务动词（`dump` / `trigger` / `open`）与业务状态标签不属于硬件 Driver，已移除；
   这类语义只能由 Application Plugin 通过 Capability 组合表达。
 
@@ -90,7 +100,7 @@ Alarm、compartment、服药时段不属于板载 Driver；这些业务只由 Ap
 
 - plugin id: io.github.deliciousbuding.cloud-path-driver-stcb
 - driver id: stcb
-- version: 0.2.1
+- version: 0.2.2
 - protocol: CloudPath Driver Protocol 1
 - compatibility: CloudPath Core >=0.2.0 <0.3.0
 - permission: hardware [serial]
