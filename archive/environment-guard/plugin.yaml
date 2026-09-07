@@ -1,0 +1,37 @@
+{
+  "apiVersion": "plugins.cloudpath.dev/v1alpha1",
+  "kind": "Application",
+  "id": "io.github.deliciousbuding.cloud-path-app-environment-guard",
+  "version": "0.1.0",
+  "protocol": 1,
+  "entrypoint": "cloud-path-app-environment-guard",
+  "compatibility": {
+    "core": ">=0.2.15 <0.3.0"
+  },
+  "permissions": {
+    "hardware": [],
+    "network": [],
+    "filesystem": [],
+    "secrets": []
+  },
+  "requirements": [
+    {
+      "id": "temperature",
+      "capability": "cloudpath.dev/capability/temperature@1",
+      "cardinality": "one"
+    },
+    {
+      "id": "illuminance",
+      "capability": "cloudpath.dev/capability/illuminance@1",
+      "cardinality": "one"
+    }
+  ],
+  "contributes": {
+    "applications": [
+      {
+        "id": "environment-guard",
+        "title": "工位环境监测"
+      }
+    ]
+  }
+}
