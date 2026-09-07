@@ -1,11 +1,13 @@
 package plugin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,7 +18,7 @@ import (
 // 稳定身份（一经发布即为机器契约，破坏性语义变化升 @2，不得原地改 @1）。
 const (
 	pluginID      = "io.github.deliciousbuding.cloud-path-driver-stcb"
-	pluginVersion = "0.2.2"
+	pluginVersion = "0.2.3"
 
 	// driverID 是 Describe 上报的稳定 driver 标识，与 plugin.yaml contributes.drivers[0].id 一致。
 	driverID = "stcb"
@@ -151,14 +153,61 @@ func capabilityDescriptors() []driver.CapabilityDescriptor {
 	}
 }
 
-// instanceConfig 是插件实例配置（来自 Server desired state 的 Config 字节）。
+// instanceConfig 是插件实例配置（来自 ConfigureInstance 的 Config 字节）。
+//
+// 线上有**两个**平台生产者，编码不同，本结构必须同时接受：
+//
+//   - Server desired state（cloud-path internal/pluginhost.configureInstance）：
+//     Instance.Config 是 map[string]string，json.Marshal 之后所有值都是 JSON 字符串，
+//     数值字段在线上是 "115200" 这样的字符串。这是插件实例配置的权威契约。
+//   - Edge 设备桥（cloud-path internal/edge/external_driver.go）：按 edge.yaml 的原生
+//     类型编码，数值字段是 JSON 数字，并额外带 extra 映射。
+//
+// 把数值字段声明成 int 只接受第二种。Core v0.2.14 起既有实例的重配置会真正下发第一种，
+// 于是整份配置被 InvalidArgument 拒绝、实例无法收敛——真机上这等于设备链路起不来。
+// 所以数值字段一律用 configScalar，两种形状都收，取值校验一律不放。
 type instanceConfig struct {
 	DeviceID      string            `json:"device_id"`
 	Name          string            `json:"name"`
 	Port          string            `json:"port"`
-	Baud          int               `json:"baud"`
-	PollIntervalS int               `json:"poll_interval_s"`
+	Baud          configScalar      `json:"baud"`
+	PollIntervalS configScalar      `json:"poll_interval_s"`
 	Extra         map[string]string `json:"extra"`
+}
+
+// configScalar 是一个整数配置值，接受 JSON 数字或等价的 JSON 字符串。
+//
+// 宽松只针对**编码形状**，不针对取值：空字符串与 null 等同「未设置」，保留零值走既有
+// 默认；无法解析成整数的值仍然报错，由 ConfigureInstance 诚实拒绝，绝不静默取零值去开
+// 串口。口径与 openConfigFor 里 connection_hints.baud 的既有 strconv 处理一致。
+type configScalar int
+
+func (s *configScalar) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
+		return nil
+	}
+	if trimmed[0] != '"' {
+		var n int
+		if err := json.Unmarshal(trimmed, &n); err != nil {
+			return fmt.Errorf("须为整数或整数字符串: %w", err)
+		}
+		*s = configScalar(n)
+		return nil
+	}
+	var text string
+	if err := json.Unmarshal(trimmed, &text); err != nil {
+		return fmt.Errorf("须为整数或整数字符串: %w", err)
+	}
+	if text = strings.TrimSpace(text); text == "" {
+		return nil
+	}
+	n, err := strconv.Atoi(text)
+	if err != nil {
+		return fmt.Errorf("须为整数或整数字符串: %w", err)
+	}
+	*s = configScalar(n)
+	return nil
 }
 
 func (c instanceConfig) pollInterval() time.Duration {
@@ -367,7 +416,7 @@ func (d *Driver) openConfigFor(req *driver.OpenDeviceRequest) (string, deviceCon
 	if def.Extra != nil {
 		protocol = def.Extra["protocol"]
 	}
-	cfg := deviceConfig{ID: deviceID, Name: def.Name, Port: def.Port, Baud: def.Baud, Protocol: protocol}
+	cfg := deviceConfig{ID: deviceID, Name: def.Name, Port: def.Port, Baud: int(def.Baud), Protocol: protocol}
 	if req.ConnectionHints != nil {
 		if v := req.ConnectionHints["port"]; v != "" {
 			cfg.Port = v
