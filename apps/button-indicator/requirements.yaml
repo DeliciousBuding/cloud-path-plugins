@@ -13,3 +13,6 @@ requirements:
   - id: sound
     capability: cloudpath.dev/capability/buzzer@1
     cardinality: zero-or-one
+  - id: acknowledge-input
+    capability: cloudpath.dev/capability/key@1
+    cardinality: zero-or-one

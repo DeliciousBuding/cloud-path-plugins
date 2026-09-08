@@ -15,18 +15,37 @@ import (
 )
 
 // Config is the bounded instance configuration for the Button Indicator
-// application. It is device-agnostic: a timezone for cron interpretation, the
-// declarative heartbeat cron and a beep toggle. It never references a Driver
-// ID, a port or any vendor-specific field.
+// application. Modes, schedules and feedback are expressed only in terms of
+// bound capabilities, never a Driver ID, a port or a vendor-specific field.
 type Config struct {
+	// Mode defaults to walking-light. call is an alias for service-call.
+	Mode     string `json:"mode"`
 	Timezone string `json:"timezone"`
 	// HeartbeatCron is a 5-field cron expression (minute hour dom month dow)
 	// interpreted in Timezone. The scheduled job writes a heartbeat domain
 	// record on every dispatch, exercising the Core Durable Scheduler.
 	HeartbeatCron string `json:"heartbeat_cron"`
-	// BeepOnPress optionally emits a short buzzer beep on every press.
-	// Default false: the walking light is the primary feedback.
+	// BeepOnPress optionally emits a short buzzer beep on a walking-light
+	// press or a newly created service call (not on coalesced presses).
+	// Default false: indication is silent.
 	BeepOnPress bool `json:"beep_on_press"`
+}
+
+const (
+	modeWalkingLight = "walking-light"
+	modeServiceCall  = "service-call"
+)
+
+// ResolvedMode preserves the original behavior unless call mode is explicit.
+func (c Config) ResolvedMode() string {
+	switch mode := strings.TrimSpace(c.Mode); mode {
+	case "":
+		return modeWalkingLight
+	case "call":
+		return modeServiceCall
+	default:
+		return mode
+	}
 }
 
 // defaultHeartbeatCron is the fallback when the config omits the cron: a
@@ -49,6 +68,10 @@ func (c Config) ResolvedHeartbeatCron() string {
 // heartbeat).
 func (c Config) Validate() error {
 	var errs []string
+
+	if mode := c.ResolvedMode(); mode != modeWalkingLight && mode != modeServiceCall {
+		errs = append(errs, "mode must be walking-light, call or service-call")
+	}
 
 	tz := strings.TrimSpace(c.Timezone)
 	if tz == "" {

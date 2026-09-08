@@ -1,17 +1,15 @@
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Application
 id: io.github.deliciousbuding.cloud-path-app-button-indicator
-version: 0.1.2
+version: 0.1.3
 protocol: 1
 # Executable entrypoint. The Application Protocol v1 service is implemented in
 # cmd/cloud-path-app-button-indicator and served over the host transport.
 entrypoint: cloud-path-app-button-indicator
 compatibility:
-  # Core compatibility range. The registry installer fails closed without it
-  # (ERR_CORE_INCOMPATIBLE). The heartbeat path requires the Durable Scheduler
-  # (scheduled_jobs, Core v0.2.8+) so schedule_job is a real primitive, not
-  # bookkeeping.
-  core: ">=0.2.8 <0.3.0"
+  # ManualOnly jobs and the generic management-console job runner require
+  # Core v0.2.15+. Earlier hosts automatically dispatch every descriptor job.
+  core: ">=0.2.15 <0.3.0"
 requirements:
   - id: button-input
     capability: cloudpath.dev/capability/key@1
@@ -23,9 +21,12 @@ requirements:
   - id: sound
     capability: cloudpath.dev/capability/buzzer@1
     cardinality: zero-or-one
+  - id: acknowledge-input
+    capability: cloudpath.dev/capability/key@1
+    cardinality: zero-or-one
 contributes:
   # The application id is the stable, semantic contribution id; it is distinct
   # from the plugin id at the top of this file.
   applications:
     - id: button-indicator
-      title: Button Indicator
+      title: 按键交互与工位呼叫

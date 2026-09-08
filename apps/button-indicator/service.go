@@ -1,13 +1,8 @@
 // Package buttonindicator is the Button Indicator reference application: the
-// second CloudPath Application plugin, intentionally minimal. Its only purpose
-// is to prove the north-star claim "adding a business changes neither the
-// Driver nor the Core": it binds generic capabilities (key@1 for input, led@1
-// for output, buzzer@1 optionally), interprets a key press as "advance the
-// walking light", and declares a heartbeat schedule through the schedule_job
-// effect so the Core Durable Scheduler drives a domain record on every cron
-// tick.
-//
-// It contains zero knowledge of STC-B, of any Driver id, port or vendor field.
+// default walking light and opt-in service-call workflow use only generic
+// key, LED and optional buzzer capabilities. A declarative heartbeat is driven
+// by the Core Durable Scheduler in both modes. The application has no knowledge
+// of any hardware, Driver id, port or vendor field.
 package buttonindicator
 
 import (
@@ -26,7 +21,7 @@ import (
 // Manifest identity. These must mirror plugin.yaml.
 const (
 	pluginIDValue = "io.github.deliciousbuding.cloud-path-app-button-indicator"
-	pluginVersion = "0.1.2"
+	pluginVersion = "0.1.3"
 
 	jobBootstrap  = "bootstrap"
 	jobHeartbeat  = "indicator-heartbeat"
@@ -47,6 +42,10 @@ const keyPressEvent = keyCap + "/press"
 
 // instanceState is the per-plugin-instance runtime state.
 type instanceState struct {
+	// callMu serializes call transitions and their effects, including jobs,
+	// completions and result deadlines. Field access still uses Service.mu.
+	callMu    sync.Mutex
+	calls     *callRuntime
 	config    *Config
 	configRev uint32
 	bindings  map[string][]string // requirement id -> entity ids
@@ -66,6 +65,9 @@ type Service struct {
 	version   string
 	runtimeID string
 
+	// sendMu keeps effect sequence allocation and transmission ordered when
+	// a command completion/deadline races a job or heartbeat.
+	sendMu      sync.Mutex
 	mu          sync.Mutex
 	initialized bool
 	closed      bool
@@ -135,13 +137,10 @@ func (s *Service) Initialize(_ context.Context, req *application.InitializeReque
 	}, nil
 }
 
-// Describe reports the capability requirements and jobs. The bootstrap job is
-// the bridge that registers the declarative heartbeat: the AppHost drives
-// descriptor jobs every minute, and bootstrap (re)declares the schedule_task
-// effect only when the config revision changes. indicator-heartbeat is
-// deliberately NOT declared here — declaring it would make the AppHost's
-// minute loop dispatch it in addition to the Durable Scheduler (double
-// drive); the heartbeat job is owned exclusively by the cron scheduler.
+// Describe reports capability requirements and jobs. bootstrap remains an
+// automatically driven descriptor job and registers the heartbeat per config
+// revision. The service-call actions are ManualOnly (Core v0.2.15+).
+// indicator-heartbeat is deliberately absent: only the cron scheduler owns it.
 func (s *Service) Describe(context.Context) (*application.ApplicationDescriptor, error) {
 	return &application.ApplicationDescriptor{
 		ApplicationID:  s.pluginID,
@@ -151,9 +150,12 @@ func (s *Service) Describe(context.Context) (*application.ApplicationDescriptor,
 			{ID: "button-input", Capability: keyCap, Cardinality: "one-or-more", MinItems: 1},
 			{ID: "indicator", Capability: ledCap, Cardinality: "one"},
 			{ID: "sound", Capability: buzzerCp, Cardinality: "zero-or-one"},
+			{ID: "acknowledge-input", Capability: keyCap, Cardinality: "zero-or-one"},
 		},
 		Jobs: []application.JobDescriptor{
 			{ID: jobBootstrap, Title: "Register declarative schedules", InputSchemaJSON: "{}"},
+			{ID: jobRequest, Title: "发起呼叫", InputSchemaJSON: requestJobSchema, ManualOnly: true},
+			{ID: jobAcknowledge, Title: "确认并解除提示", InputSchemaJSON: acknowledgeJobSchema, ManualOnly: true},
 		},
 		DeclarativeOnly: false,
 	}, nil
@@ -175,6 +177,13 @@ func (s *Service) ConfigureInstance(_ context.Context, req *application.Configur
 
 	s.mu.Lock()
 	st := s.instance(req.PluginInstanceID)
+	if st.config != nil && st.config.ResolvedMode() != cfg.ResolvedMode() && st.callBusy() {
+		s.mu.Unlock()
+		return &application.ConfigureInstanceResponse{
+			PluginInstanceID: req.PluginInstanceID,
+			Status:           status.Errorf(status.CodeFailedPrecondition, "acknowledge the pending call and wait for command results before changing mode"),
+		}, nil
+	}
 	st.config = &cfg
 	st.configRev = req.ConfigRevision
 	s.mu.Unlock()
@@ -196,7 +205,15 @@ func (s *Service) ValidateBinding(_ context.Context, req *application.ValidateBi
 	valid := len(issues) == 0
 	if valid {
 		s.mu.Lock()
-		s.instance(req.PluginInstanceID).bindings = groupBindings(req.Bindings)
+		st := s.instance(req.PluginInstanceID)
+		if st.callBusy() && !sameBindings(st.bindings, req.Bindings) {
+			valid = false
+			issues = append(issues, application.BindingIssue{
+				Severity: "error", Message: "acknowledge the pending call and wait for command results before rebinding",
+			})
+		} else {
+			st.bindings = groupBindings(req.Bindings)
+		}
 		s.mu.Unlock()
 	}
 	return &application.ValidateBindingResponse{Valid: valid, Issues: issues}, nil
@@ -264,11 +281,11 @@ func (s *Service) handleEvent(ev *application.ApplicationEvent) error {
 	case *application.CapabilityEvent:
 		return s.onCapabilityEvent(instanceID, u)
 	case *application.RequestCompleted:
-		return nil // the walking light is fire-and-forget; no state machine
+		return s.onCallCommandCompleted(instanceID, u)
 	case *application.ScheduleTick:
 		return nil // button-indicator declares no schedule windows
 	case *application.InstanceLifecycle:
-		return nil
+		return s.flushCallRecords(instanceID)
 	default:
 		return nil
 	}
@@ -295,6 +312,10 @@ func (s *Service) onKeyEvent(instanceID string, ev *application.CapabilityEvent)
 	if st.config == nil {
 		s.mu.Unlock()
 		return nil // not configured yet
+	}
+	if st.config.ResolvedMode() == modeServiceCall {
+		s.mu.Unlock()
+		return s.onServiceCallKey(instanceID, ev)
 	}
 	if !st.bound("button-input", ev.EntityID) {
 		s.mu.Unlock()
@@ -346,7 +367,7 @@ func (s *Service) onKeyEvent(instanceID string, ev *application.CapabilityEvent)
 // Jobs
 // ---------------------------------------------------------------------------
 
-// RunJob implements the two jobs. bootstrap (driven every minute by the
+// RunJob implements the heartbeat jobs and explicit service-call actions. bootstrap (driven every minute by the
 // AppHost descriptor-job loop) registers the declarative heartbeat through a
 // schedule_task effect, idempotent per config revision. indicator-heartbeat
 // is dispatched by the Core Durable Scheduler on the cron schedule and writes
@@ -368,6 +389,9 @@ func (s *Service) RunJob(_ context.Context, req *application.RunJobRequest) (*ap
 	}
 
 	switch req.JobID {
+	case jobRequest, jobAcknowledge:
+		s.mu.Unlock()
+		return s.runCallJob(req)
 	case jobBootstrap:
 		if req.IdempotencyKey != "" {
 			if _, done := st.jobs[req.IdempotencyKey]; done {
@@ -411,6 +435,15 @@ func (s *Service) RunJob(_ context.Context, req *application.RunJobRequest) (*ap
 		}
 		count, mask := st.pressCount, st.ledMask
 		at := s.now().UTC().Format(time.RFC3339)
+		heartbeat := map[string]any{"at": at, "press_count": count, "led_mask": mask}
+		if st.config.ResolvedMode() == modeServiceCall {
+			// A desired command mask is not an observed hardware state.
+			delete(heartbeat, "led_mask")
+			delete(heartbeat, "press_count")
+			heartbeat["mode"] = modeServiceCall
+			st.addCallSummary(heartbeat)
+		}
+		dataJSON := mustJSON(heartbeat)
 		if req.IdempotencyKey != "" {
 			if st.jobs == nil {
 				st.jobs = map[string]string{}
@@ -421,12 +454,8 @@ func (s *Service) RunJob(_ context.Context, req *application.RunJobRequest) (*ap
 		if err := s.sendEffect(req.PluginInstanceID, &application.UpsertDomainRecord{
 			RecordType: "heartbeat",
 			RecordID:   "last",
-			DataJSON: mustJSON(map[string]any{
-				"at":          at,
-				"press_count": count,
-				"led_mask":    mask,
-			}),
-			Version: at,
+			DataJSON:   dataJSON,
+			Version:    at,
 		}); err != nil {
 			return nil, err
 		}
@@ -462,8 +491,13 @@ func (s *Service) HandleRequest(_ context.Context, req *application.PluginHTTPRe
 		if st.config != nil {
 			statusBody["heartbeat_cron"] = st.config.ResolvedHeartbeatCron()
 			statusBody["heartbeat_registered"] = st.heartbeatOn
-			statusBody["press_count"] = st.pressCount
-			statusBody["led_mask"] = st.ledMask
+			statusBody["mode"] = st.config.ResolvedMode()
+			if st.config.ResolvedMode() == modeServiceCall {
+				st.addCallSummary(statusBody)
+			} else {
+				statusBody["press_count"] = st.pressCount
+				statusBody["led_mask"] = st.ledMask
+			}
 			statusBody["buttons"] = len(st.bindings["button-input"])
 		} else {
 			statusBody["configured"] = false
@@ -501,6 +535,15 @@ func (s *Service) Health(context.Context) (*application.HealthResponse, error) {
 func (s *Service) Shutdown(_ context.Context, _ *application.ShutdownRequest) (*application.ShutdownResponse, error) {
 	s.mu.Lock()
 	s.closed = true
+	for _, st := range s.instances {
+		if st.calls != nil {
+			for _, cmd := range st.calls.commands {
+				if cmd.timer != nil {
+					cmd.timer.Stop()
+				}
+			}
+		}
+	}
 	s.mu.Unlock()
 	return &application.ShutdownResponse{Status: status.New()}, nil
 }
@@ -550,6 +593,12 @@ func (s *Service) flush(instanceID string, effects []application.ApplicationEffe
 }
 
 func (s *Service) sendEffect(instanceID string, union application.ApplicationEffectUnion) error {
+	return s.emitEffect(instanceID, union, false)
+}
+
+func (s *Service) emitEffect(instanceID string, union application.ApplicationEffectUnion, requireWriter bool) error {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
 	s.mu.Lock()
 	writer := s.writers[instanceID]
 	if s.closed {
@@ -560,13 +609,21 @@ func (s *Service) sendEffect(instanceID string, union application.ApplicationEff
 	seq := s.effectSeq
 	s.mu.Unlock()
 	if writer == nil {
-		return nil // no active stream for this instance; nothing to emit
+		if requireWriter {
+			return status.Errorf(status.CodeUnavailable, "instance %q has no active effect stream", instanceID)
+		}
+		return nil // preserve legacy fire-and-forget behavior
 	}
 	eff := &application.ApplicationEffect{
 		PluginInstanceID: instanceID,
 		Sequence:         seq,
 		SchemaVersion:    application.SchemaVersion,
 		Union:            union,
+	}
+	if requireWriter {
+		ctx, cancel := context.WithTimeout(context.Background(), callResultWait)
+		defer cancel()
+		return writer.Send(ctx, eff)
 	}
 	return writer.Send(context.Background(), eff)
 }
@@ -575,7 +632,7 @@ func (s *Service) sendEffect(instanceID string, union application.ApplicationEff
 // any requirement id that is not part of this application (which structurally
 // rules out Driver coupling).
 func validateBindings(bindings []application.Binding) []application.BindingIssue {
-	allowed := map[string]struct{}{"button-input": {}, "indicator": {}, "sound": {}}
+	allowed := map[string]struct{}{"button-input": {}, "indicator": {}, "sound": {}, "acknowledge-input": {}}
 	var issues []application.BindingIssue
 	seen := map[string]bool{}
 
@@ -634,6 +691,18 @@ func validateBindings(bindings []application.Binding) []application.BindingIssue
 			Severity:      "error",
 			Message:       "at most one sound entity is allowed",
 		})
+	}
+	if counts["acknowledge-input"] > 1 {
+		issues = append(issues, application.BindingIssue{
+			RequirementID: "acknowledge-input", Severity: "error", Message: "at most one acknowledgement button is allowed",
+		})
+	}
+	for _, b := range bindings {
+		if b.RequirementID == "acknowledge-input" && seen["button-input\x00"+b.EntityID] {
+			issues = append(issues, application.BindingIssue{
+				RequirementID: "acknowledge-input", Severity: "error", Message: "request and acknowledgement inputs must be different entities",
+			})
+		}
 	}
 	return issues
 }

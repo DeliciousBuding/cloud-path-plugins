@@ -2,6 +2,8 @@ package buttonindicator
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -78,9 +80,10 @@ func TestDescribeReportsRequirements(t *testing.T) {
 		t.Fatalf("descriptor identity = %q/%q", desc.ApplicationID, desc.Version)
 	}
 	want := map[string]string{
-		"button-input": keyCap,
-		"indicator":    ledCap,
-		"sound":        buzzerCp,
+		"button-input":      keyCap,
+		"indicator":         ledCap,
+		"sound":             buzzerCp,
+		"acknowledge-input": keyCap,
 	}
 	if len(desc.Requirements) != len(want) {
 		t.Fatalf("requirements = %+v", desc.Requirements)
@@ -94,9 +97,111 @@ func TestDescribeReportsRequirements(t *testing.T) {
 	for _, j := range desc.Jobs {
 		jobIDs[j.ID] = true
 	}
-	// descriptor 只声明 bootstrap：indicator-heartbeat 归 Durable Scheduler
-	// 独占驱动（声明两处会双派发）
-	if !jobIDs[jobBootstrap] || jobIDs[jobHeartbeat] {
-		t.Fatalf("descriptor jobs must be bootstrap-only: %+v", desc.Jobs)
+	// Only bootstrap is auto-dispatched. Heartbeat remains cron-owned; the
+	// other descriptors exist for the generic management-console operation UI.
+	if len(desc.Jobs) != 3 || !jobIDs[jobBootstrap] || !jobIDs[jobRequest] || !jobIDs[jobAcknowledge] || jobIDs[jobHeartbeat] {
+		t.Fatalf("unexpected descriptor jobs: %+v", desc.Jobs)
+	}
+	for _, job := range desc.Jobs {
+		if job.ManualOnly != (job.ID != jobBootstrap) {
+			t.Fatalf("unsafe automatic dispatch for job: %+v", job)
+		}
+		if !json.Valid([]byte(job.InputSchemaJSON)) || job.Title == "" {
+			t.Fatalf("job missing usable schema/title: %+v", job)
+		}
+	}
+}
+
+// Compare all three declarations, including cardinalities/minItems. Checking
+// only capability strings misses drift when two requirements share key@1.
+func TestRequirementDeclarationsStayInSync(t *testing.T) {
+	desc, err := New().Describe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want []string
+	for _, r := range desc.Requirements {
+		want = append(want, "- id: "+r.ID, "capability: "+r.Capability, "cardinality: "+r.Cardinality)
+		if r.MinItems != 0 {
+			want = append(want, fmt.Sprintf("minItems: %d", r.MinItems))
+		}
+	}
+	for _, name := range []string{"plugin.yaml", "requirements.yaml"} {
+		var got []string
+		inRequirements := false
+		for _, line := range strings.Split(repoFile(t, name), "\n") {
+			line = strings.TrimSuffix(line, "\r")
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+				continue
+			}
+			if line == "requirements:" {
+				inRequirements = true
+				continue
+			}
+			if !inRequirements {
+				continue
+			}
+			if !strings.HasPrefix(line, " ") {
+				break
+			}
+			got = append(got, trimmed)
+		}
+		if strings.Join(got, "\n") != strings.Join(want, "\n") {
+			t.Fatalf("%s requirements differ from Describe:\ngot: %v\nwant: %v", name, got, want)
+		}
+	}
+	if !strings.Contains(repoFile(t, "plugin.yaml"), `core: ">=0.2.15 <0.3.0"`) {
+		t.Fatal("manual jobs must not install on a Core that auto-runs every job")
+	}
+	if !strings.Contains(repoFile(t, "go.mod"), "github.com/DeliciousBuding/cloud-path v0.2.15") {
+		t.Fatal("public SDK dependency must provide ManualOnly")
+	}
+}
+
+func TestServiceCallJobInputSchemas(t *testing.T) {
+	desc, err := New().Describe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, job := range desc.Jobs {
+		if job.ID == jobBootstrap {
+			continue
+		}
+		var schema struct {
+			Type       string `json:"type"`
+			Properties map[string]struct {
+				Type      string `json:"type"`
+				Title     string `json:"title"`
+				Const     *bool  `json:"const"`
+				MinLength int    `json:"minLength"`
+				MaxLength int    `json:"maxLength"`
+				Pattern   string `json:"pattern"`
+			} `json:"properties"`
+			Required             []string `json:"required"`
+			AdditionalProperties *bool    `json:"additionalProperties"`
+		}
+		if err := json.Unmarshal([]byte(job.InputSchemaJSON), &schema); err != nil {
+			t.Fatal(err)
+		}
+		if schema.Type != "object" || schema.AdditionalProperties == nil || *schema.AdditionalProperties || len(schema.Required) != 1 {
+			t.Fatalf("job has an unbounded/non-object schema: %+v", job)
+		}
+		if job.ID == jobRequest {
+			confirm, note := schema.Properties["confirm"], schema.Properties["note"]
+			if len(schema.Properties) != 2 || schema.Required[0] != "confirm" || confirm.Type != "boolean" || confirm.Const == nil || !*confirm.Const || note.Type != "string" || note.MaxLength != 256 {
+				t.Fatalf("request schema disagrees with validation: %+v", schema)
+			}
+		} else {
+			id := schema.Properties["request_id"]
+			if len(schema.Properties) != 1 || schema.Required[0] != "request_id" || id.Type != "string" || id.MinLength != 1 || id.MaxLength != 128 || id.Pattern != `^\S+$` {
+				t.Fatalf("acknowledge schema disagrees with validation: %+v", schema)
+			}
+		}
+		for field, property := range schema.Properties {
+			if property.Title == "" {
+				t.Fatalf("%s.%s has no understandable form label", job.ID, field)
+			}
+		}
 	}
 }
