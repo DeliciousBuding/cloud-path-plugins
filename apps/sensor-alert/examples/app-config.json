@@ -1,0 +1,15 @@
+{
+  "temperature_min": 18,
+  "temperature_max": 28,
+  "light_min": null,
+  "light_max": null,
+  "contact_enabled": false,
+  "vibration_enabled": false,
+  "cooldown_s": 60,
+  "silent": false,
+  "alert_led_mask": 255,
+  "alert_tone": {
+    "frequency_hz": 1000,
+    "duration_ms": 200
+  }
+}

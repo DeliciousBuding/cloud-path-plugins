@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sensor Alert 配置",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "temperature_min": {
+      "type": "number",
+      "default": 18,
+      "description": "温度下限；低于该值触发 temperature-low。"
+    },
+    "temperature_max": {
+      "type": "number",
+      "default": 28,
+      "description": "温度上限；高于该值触发 temperature-high。"
+    },
+    "light_min": {
+      "type": ["number", "null"],
+      "default": null,
+      "description": "光照下限；null 表示不评估光照下限。"
+    },
+    "light_max": {
+      "type": ["number", "null"],
+      "default": null,
+      "description": "光照上限；null 表示不评估光照上限。"
+    },
+    "contact_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "启用 hall@1 接触事件告警。"
+    },
+    "vibration_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "启用 vibration@1 振动事件告警。"
+    },
+    "cooldown_s": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 86400,
+      "default": 60,
+      "description": "同一条件触发后的静默秒数；0 表示不抑制重复触发。"
+    },
+    "silent": {
+      "type": "boolean",
+      "default": false,
+      "description": "true 时仅记录并控制灯光，不发送 tone。"
+    },
+    "alert_led_mask": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255,
+      "default": 255,
+      "description": "触发时发送给 led@1 的 mask。"
+    },
+    "alert_tone": {
+      "type": ["object", "null"],
+      "default": {"frequency_hz": 1000, "duration_ms": 200},
+      "additionalProperties": false,
+      "properties": {
+        "frequency_hz": {"type": "integer", "minimum": 1, "maximum": 4000},
+        "duration_ms": {"type": "integer", "minimum": 10, "maximum": 1200, "multipleOf": 10}
+      },
+      "required": ["frequency_hz", "duration_ms"]
+    }
+  }
+}

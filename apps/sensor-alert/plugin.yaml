@@ -1,0 +1,57 @@
+{
+  "apiVersion": "plugins.cloudpath.dev/v1alpha1",
+  "kind": "Application",
+  "id": "io.github.deliciousbuding.cloud-path-app-sensor-alert",
+  "version": "0.1.0",
+  "protocol": 1,
+  "entrypoint": "cloud-path-app-sensor-alert",
+  "compatibility": {
+    "core": ">=0.2.15 <0.3.0"
+  },
+  "permissions": {
+    "hardware": [],
+    "network": [],
+    "filesystem": [],
+    "secrets": []
+  },
+  "requirements": [
+    {
+      "id": "temperature",
+      "capability": "cloudpath.dev/capability/temperature@1",
+      "cardinality": "zero-or-one"
+    },
+    {
+      "id": "illuminance",
+      "capability": "cloudpath.dev/capability/illuminance@1",
+      "cardinality": "zero-or-one"
+    },
+    {
+      "id": "contact",
+      "capability": "cloudpath.dev/capability/hall@1",
+      "cardinality": "zero-or-one"
+    },
+    {
+      "id": "vibration",
+      "capability": "cloudpath.dev/capability/vibration@1",
+      "cardinality": "zero-or-one"
+    },
+    {
+      "id": "alert-sound",
+      "capability": "cloudpath.dev/capability/buzzer@1",
+      "cardinality": "zero-or-one"
+    },
+    {
+      "id": "alert-light",
+      "capability": "cloudpath.dev/capability/led@1",
+      "cardinality": "zero-or-one"
+    }
+  ],
+  "contributes": {
+    "applications": [
+      {
+        "id": "sensor-alert",
+        "title": "通用传感器告警"
+      }
+    ]
+  }
+}
