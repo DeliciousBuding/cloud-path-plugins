@@ -1,0 +1,9 @@
+# gofmt 门禁跨平台一致性：Windows 默认 core.autocrlf=true 会把 LF 源码检出为 CRLF，
+# 导致 gofmt -l 把全部 .go 误判为未格式化。仓库内统一 LF 落盘。
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.sh text eol=lf
