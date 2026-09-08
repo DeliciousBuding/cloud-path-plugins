@@ -441,7 +441,7 @@ func TestStartWindowEffectsAndHallOpenConfirmation(t *testing.T) {
 	}
 }
 
-func TestHallCloseDoesNotConfirm(t *testing.T) {
+func TestHallCloseIgnoredThenAwayConfirms(t *testing.T) {
 	f := newFixture(t, false)
 	f.mustJob(t, jobStartWindow, `{"window_id":"close-1","minutes":10}`, "close-start")
 	f.sink.take()
@@ -457,6 +457,93 @@ func TestHallCloseDoesNotConfirm(t *testing.T) {
 	}
 	if f.window(t, "close-1").State != windowOpened {
 		t.Fatal("hall close must not confirm an opened window")
+	}
+
+	f.advance(10 * time.Second)
+	f.event(t, &application.CapabilityEvent{
+		RequirementID: openingRequirement,
+		EntityID:      hallEntity,
+		EventType:     hallAwayEvent,
+		OccurredAt:    f.now().Format(time.RFC3339Nano),
+	})
+	record := recordData(t, recordsOf(f.sink.take())[0])
+	if record["state"] != windowCompleted || record["confirmation_source"] != sourceHall {
+		t.Fatalf("away after close did not confirm: %+v", record)
+	}
+}
+
+func TestHallOpenEventConfirms(t *testing.T) {
+	f := newFixture(t, false)
+	f.mustJob(t, jobStartWindow, `{"window_id":"open-1","minutes":10}`, "open-start")
+	f.sink.take()
+	f.advance(time.Minute)
+	f.event(t, &application.CapabilityEvent{
+		RequirementID: openingRequirement,
+		EntityID:      hallEntity,
+		EventType:     hallOpenEvent,
+		OccurredAt:    f.now().Format(time.RFC3339Nano),
+	})
+
+	effects := f.sink.take()
+	record := recordData(t, recordsOf(effects)[0])
+	if record["state"] != windowCompleted || record["confirmation_source"] != sourceHall {
+		t.Fatalf("hall open confirmation = %+v", record)
+	}
+	if f.window(t, "open-1").State != windowCompleted {
+		t.Fatal("hall open event must confirm an opened window")
+	}
+}
+
+func TestHallCloseDoesNotLateConfirmMissedWindow(t *testing.T) {
+	f := newFixture(t, false)
+	f.mustJob(t, jobStartWindow, `{"window_id":"close-missed-1","minutes":1}`, "close-missed-start")
+	f.sink.take()
+	f.advance(2 * time.Minute)
+	f.mustJob(t, jobCheckWindow, `{}`, "close-missed-check")
+	f.sink.take()
+
+	f.event(t, &application.CapabilityEvent{
+		RequirementID: openingRequirement,
+		EntityID:      hallEntity,
+		EventType:     hallCloseEvent,
+		OccurredAt:    f.now().Format(time.RFC3339Nano),
+	})
+	if effects := f.sink.take(); len(effects) != 0 {
+		t.Fatalf("hall close emitted late-confirmation effects: %+v", effects)
+	}
+	if state := f.window(t, "close-missed-1").State; state != windowMissed {
+		t.Fatalf("hall close changed missed window to %q", state)
+	}
+}
+
+func TestHallOpeningEventsRequireBoundOpeningEntity(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		requirementID string
+		entityID      string
+		eventType     string
+	}{
+		{name: "wrong requirement", requirementID: confirmRequirement, entityID: hallEntity, eventType: hallAwayEvent},
+		{name: "wrong entity", requirementID: openingRequirement, entityID: "dev/other-hall", eventType: hallOpenEvent},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t, false)
+			f.mustJob(t, jobStartWindow, `{"window_id":"bound-1","minutes":10}`, "bound-start")
+			f.sink.take()
+			f.advance(time.Minute)
+			f.event(t, &application.CapabilityEvent{
+				RequirementID: tc.requirementID,
+				EntityID:      tc.entityID,
+				EventType:     tc.eventType,
+				OccurredAt:    f.now().Format(time.RFC3339Nano),
+			})
+			if effects := f.sink.take(); len(effects) != 0 {
+				t.Fatalf("unbound opening event emitted effects: %+v", effects)
+			}
+			if state := f.window(t, "bound-1").State; state != windowOpened {
+				t.Fatalf("unbound opening event changed state to %q", state)
+			}
+		})
 	}
 }
 
