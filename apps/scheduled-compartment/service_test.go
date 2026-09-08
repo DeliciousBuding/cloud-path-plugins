@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,12 +15,16 @@ import (
 )
 
 const (
-	testInstance   = "app-1"
-	buzzerEntityID = "dev/buzzer"
-	c1             = "dev/key-1"
-	c2             = "dev/key-2"
-	c3             = "dev/key-3"
+	testInstance         = "app-1"
+	buzzerEntityID       = "dev/buzzer"
+	c1                   = "dev/key-1"
+	c2                   = "dev/key-2"
+	c3                   = "dev/key-3"
+	testScheduledWindow  = "schedule:win-1:20260903T000000Z"
+	testScheduledWindow2 = "schedule:win-2:20260903T001000Z"
 )
+
+var testZone = time.FixedZone("UTC+08", 8*60*60)
 
 var validConfigJSON = `{
   "timezone": "Asia/Shanghai",
@@ -54,7 +59,7 @@ type testApp struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	stream    application.ApplicationEventStream
-	now       time.Time
+	clock     atomic.Value
 }
 
 func newTestApp(t *testing.T, now time.Time) *testApp {
@@ -63,9 +68,9 @@ func newTestApp(t *testing.T, now time.Time) *testApp {
 	a := &testApp{
 		t:   t,
 		svc: svc,
-		now: now,
 	}
-	svc.now = func() time.Time { return a.now }
+	a.clock.Store(now)
+	svc.now = func() time.Time { return a.clock.Load().(time.Time) }
 
 	serverEnd, clientEnd := transport.Pipe(256)
 	rpcServer := application.NewRPCServer(serverEnd, svc)
@@ -261,7 +266,7 @@ func TestDescriptorRequirements(t *testing.T) {
 	if desc.ApplicationID != "io.github.deliciousbuding.cloud-path-app-scheduled-compartment" {
 		t.Fatalf("application id = %q", desc.ApplicationID)
 	}
-	if desc.Version != "0.2.2" {
+	if desc.Version != "0.2.3" {
 		t.Fatalf("version = %q", desc.Version)
 	}
 	if desc.DeclarativeOnly {
@@ -276,7 +281,7 @@ func TestDescriptorRequirements(t *testing.T) {
 		min  uint32
 	}{
 		"reminder-output": {"cloudpath.dev/capability/buzzer@1", "one", 0},
-		"compartments":    {"cloudpath.dev/capability/key@1", "one-or-more", 3},
+		"compartments":    {"cloudpath.dev/capability/key@1", "one-or-more", 1},
 		"local-display":   {"cloudpath.dev/capability/display-text@1", "zero-or-one", 0},
 	}
 	for _, r := range desc.Requirements {
@@ -293,8 +298,13 @@ func TestDescriptorRequirements(t *testing.T) {
 	if len(want) != 0 {
 		t.Fatalf("missing requirements: %v", want)
 	}
-	if len(desc.Jobs) != 1 || desc.Jobs[0].ID != "window-check" {
-		t.Fatalf("jobs = %+v, want single window-check job", desc.Jobs)
+	if len(desc.Jobs) != 3 || desc.Jobs[0].ID != jobWindowCheck || desc.Jobs[0].ManualOnly {
+		t.Fatalf("jobs = %+v, want automatic window-check and two manual jobs", desc.Jobs)
+	}
+	for _, job := range desc.Jobs[1:] {
+		if !job.ManualOnly {
+			t.Fatalf("manual-only flag lost over the public RPC wire: %+v", job)
+		}
 	}
 }
 
@@ -330,14 +340,14 @@ func TestConfigureAndValidateBinding(t *testing.T) {
 		t.Fatal("expected missing reminder-output to be invalid")
 	}
 
-	// fewer than 3 compartments -> invalid
+	// configured three compartments cannot use only two bindings
 	bad2 := []application.Binding{
 		{RequirementID: "reminder-output", EntityID: buzzerEntityID},
 		{RequirementID: "compartments", EntityID: c1},
 		{RequirementID: "compartments", EntityID: c2},
 	}
 	if r := a.validate(bad2); r.Valid {
-		t.Fatal("expected fewer than 3 compartments to be invalid")
+		t.Fatal("expected binding/config count mismatch to be invalid")
 	}
 
 	// unknown requirement -> invalid (structural driver-coupling rejection)
@@ -367,7 +377,7 @@ func TestConfigureAndValidateBinding(t *testing.T) {
 }
 
 func TestWindowReminderEffect(t *testing.T) {
-	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC))
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 8, 0, 0, 0, testZone))
 	defer a.close()
 	a.openStream()
 	a.send(1, &application.ScheduleTick{ScheduleID: "s-1", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON})
@@ -402,13 +412,13 @@ func TestWindowReminderEffect(t *testing.T) {
 	if args.Freq != defaultReminder.Freq || args.Duration != defaultReminder.Duration {
 		t.Fatalf("buzzer args = %+v, want default reminder policy %+v", args, defaultReminder)
 	}
-	if gotRequest.IdempotencyKey != "reminder-win-1" {
+	if gotRequest.IdempotencyKey != reminderRequestPrefix+testScheduledWindow {
 		t.Fatalf("idempotency = %q, want reminder-win-1", gotRequest.IdempotencyKey)
 	}
 	if !gotUpsert {
 		t.Fatal("expected a window UpsertDomainRecord effect")
 	}
-	if got := windowStateOf(effects, "win-1"); got != windowOpened {
+	if got := windowStateOf(effects, testScheduledWindow); got != windowOpened {
 		t.Fatalf("window state = %q, want %q", got, windowOpened)
 	}
 }
@@ -418,16 +428,16 @@ func TestWindowReminderEffect(t *testing.T) {
 // 携带 reminder_state/reminder_result，而窗口状态机保持不变（仍 opened，
 // 只有按键或 window-check 才改状态）。失败与成功回执都必须落痕。
 func TestRequestCompletedRecordsReminderOutcome(t *testing.T) {
-	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC))
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 8, 0, 0, 0, testZone))
 	defer a.close()
 	a.openStream()
 	a.send(1, &application.ScheduleTick{ScheduleID: "s-1", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON})
 	_ = a.waitEffects(3, 60*time.Millisecond)
 
 	// 失败回执：设备 ERR（badarg）经 driver→edge→server 最终回到应用。
-	a.now = time.Date(2026, 9, 3, 8, 0, 2, 0, time.UTC)
+	a.setNow(time.Date(2026, 9, 3, 8, 0, 2, 0, testZone))
 	a.send(2, &application.RequestCompleted{
-		RequestID:  "reminder-win-1",
+		RequestID:  reminderRequestPrefix + testScheduledWindow,
 		EntityID:   buzzerEntityID,
 		Action:     "buzzer",
 		State:      application.CommandStateFailed,
@@ -435,32 +445,33 @@ func TestRequestCompletedRecordsReminderOutcome(t *testing.T) {
 	})
 	effects := a.waitEffects(1, 60*time.Millisecond)
 
-	if got := windowStateOf(effects, "win-1"); got != windowOpened {
+	if got := windowStateOf(effects, testScheduledWindow); got != windowOpened {
 		t.Fatalf("回执不得改窗口状态机: state = %q, want %q", got, windowOpened)
 	}
-	if got, ok := windowFieldOf(effects, "win-1", "reminder_state"); !ok || got != "failed" {
+	if got, ok := windowFieldOf(effects, testScheduledWindow, "reminder_state"); !ok || got != "failed" {
 		t.Fatalf("reminder_state = %v (%t), want failed", got, ok)
 	}
-	if got, ok := windowFieldOf(effects, "win-1", "reminder_result"); !ok || got != "stcb: device ERR id=7 code=badarg" {
+	if got, ok := windowFieldOf(effects, testScheduledWindow, "reminder_result"); !ok || got != "stcb: device ERR id=7 code=badarg" {
 		t.Fatalf("reminder_result = %v (%t), want 原样回执 detail", got, ok)
 	}
-	if got, ok := windowFieldOf(effects, "win-1", "reminder_done_at"); !ok || got == "" {
+	if got, ok := windowFieldOf(effects, testScheduledWindow, "reminder_done_at"); !ok || got == "" {
 		t.Fatalf("reminder_done_at = %v (%t), want 非空时间戳", got, ok)
 	}
 
 	// 成功回执同样落痕（另一窗口）：复用同一实例开第二个窗口验证 succeeded。
+	a.setNow(time.Date(2026, 9, 3, 8, 10, 0, 0, testZone))
 	a.send(3, &application.ScheduleTick{ScheduleID: "s-2", OccurredAt: "2026-09-03T08:10:00+08:00",
 		WindowJSON: `{"id":"win-2","compartment":"c2","start":"2026-09-03T08:10:00+08:00","end":"2026-09-03T08:40:00+08:00"}`})
 	_ = a.waitEffects(3, 60*time.Millisecond)
 	a.send(4, &application.RequestCompleted{
-		RequestID:  "reminder-win-2",
+		RequestID:  reminderRequestPrefix + testScheduledWindow2,
 		EntityID:   buzzerEntityID,
 		Action:     "buzzer",
 		State:      application.CommandStateSucceeded,
 		ResultJSON: "device ACK id=8 detail=ok",
 	})
 	effects = a.waitEffects(1, 60*time.Millisecond)
-	if got, ok := windowFieldOf(effects, "win-2", "reminder_state"); !ok || got != "succeeded" {
+	if got, ok := windowFieldOf(effects, testScheduledWindow2, "reminder_state"); !ok || got != "succeeded" {
 		t.Fatalf("win-2 reminder_state = %v (%t), want succeeded", got, ok)
 	}
 
@@ -479,7 +490,7 @@ func TestRequestCompletedRecordsReminderOutcome(t *testing.T) {
 // B 的回到 B 的流。全局单 writer 会让后开的流劫持所有 effect，对端按
 // 「实例不匹配」拒绝（2026-09-05 真板实测：双实例 faults 全部 effect 被拒）。
 func TestMultiInstanceEffectRouting(t *testing.T) {
-	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC))
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 8, 0, 0, 0, testZone))
 	defer a.close()
 	a.openStream() // 实例 app-1 的流
 
@@ -535,12 +546,13 @@ func TestMultiInstanceEffectRouting(t *testing.T) {
 }
 
 func TestKeyPressCompletesWindow(t *testing.T) {
-	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC))
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 8, 0, 0, 0, testZone))
 	defer a.close()
 	a.openStream()
 	a.send(1, &application.ScheduleTick{ScheduleID: "s-1", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON})
 	_ = a.waitEffects(3, 60*time.Millisecond)
 
+	a.setNow(time.Date(2026, 9, 3, 8, 5, 0, 0, testZone))
 	a.send(2, &application.CapabilityEvent{
 		RequirementID: "compartments",
 		EntityID:      c1,
@@ -548,16 +560,16 @@ func TestKeyPressCompletesWindow(t *testing.T) {
 		OccurredAt:    "2026-09-03T08:05:00+08:00",
 	})
 	effects := a.waitEffects(2, 60*time.Millisecond)
-	if got := windowStateOf(effects, "win-1"); got != windowCompleted {
+	if got := windowStateOf(effects, testScheduledWindow); got != windowCompleted {
 		t.Fatalf("window state = %q, want %q", got, windowCompleted)
 	}
-	if !hasCancelTask(effects, "window-check-win-1") {
+	if !hasCancelTask(effects, windowTaskID(testScheduledWindow)) {
 		t.Fatal("expected a CancelScheduledTask for the completed window")
 	}
 }
 
 func TestMissedWindowRecord(t *testing.T) {
-	start := time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC)
+	start := time.Date(2026, 9, 3, 8, 0, 0, 0, testZone)
 	a := mustConfigureAndBind(t, start)
 	defer a.close()
 	a.openStream()
@@ -565,7 +577,7 @@ func TestMissedWindowRecord(t *testing.T) {
 	_ = a.waitEffects(3, 60*time.Millisecond)
 
 	// advance the clock past the window end and run the window-check job
-	a.now = time.Date(2026, 9, 3, 8, 31, 0, 0, time.UTC)
+	a.setNow(time.Date(2026, 9, 3, 8, 31, 0, 0, testZone))
 	resp := a.runJob("window-check", "job-missed-1")
 	if !resp.Status.IsOK() {
 		t.Fatalf("RunJob status: %s", resp.Status)
@@ -574,10 +586,10 @@ func TestMissedWindowRecord(t *testing.T) {
 		t.Fatalf("result %s does not mention win-1", resp.ResultJSON)
 	}
 	effects := a.waitEffects(3, 60*time.Millisecond)
-	if got := windowStateOf(effects, "win-1"); got != windowMissed {
+	if got := windowStateOf(effects, testScheduledWindow); got != windowMissed {
 		t.Fatalf("window state = %q, want %q", got, windowMissed)
 	}
-	if !hasCancelTask(effects, "window-check-win-1") {
+	if !hasCancelTask(effects, windowTaskID(testScheduledWindow)) {
 		t.Fatal("expected CancelScheduledTask for missed window")
 	}
 	if !hasNotification(effects) {
@@ -595,7 +607,7 @@ func TestMissedWindowRecord(t *testing.T) {
 }
 
 func TestDuplicateEventIdempotent(t *testing.T) {
-	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 8, 0, 0, 0, time.UTC))
+	a := mustConfigureAndBind(t, time.Date(2026, 9, 3, 8, 0, 0, 0, testZone))
 	defer a.close()
 	a.openStream()
 
@@ -610,6 +622,7 @@ func TestDuplicateEventIdempotent(t *testing.T) {
 	a.send(1, &application.ScheduleTick{ScheduleID: "s-1", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON})
 	a.send(2, &application.ScheduleTick{ScheduleID: "s-1", OccurredAt: "2026-09-03T08:00:00+08:00", WindowJSON: windowTickJSON})
 
+	a.setNow(time.Date(2026, 9, 3, 8, 5, 0, 0, testZone))
 	a.send(3, &application.CapabilityEvent{
 		RequirementID: "compartments", EntityID: c1, EventType: keyPressEvent,
 		OccurredAt: "2026-09-03T08:05:00+08:00",
@@ -618,11 +631,12 @@ func TestDuplicateEventIdempotent(t *testing.T) {
 	if n := countRequestCommand(after); n != 0 {
 		t.Fatalf("duplicate events emitted %d additional RequestCommand, want 0", n)
 	}
-	if got := windowStateOf(after, "win-1"); got != windowCompleted {
+	if got := windowStateOf(after, testScheduledWindow); got != windowCompleted {
 		t.Fatalf("window state after complete = %q, want %q", got, windowCompleted)
 	}
 
 	// a duplicate key press after completion must not re-complete
+	a.setNow(time.Date(2026, 9, 3, 8, 6, 0, 0, testZone))
 	a.send(4, &application.CapabilityEvent{
 		RequirementID: "compartments", EntityID: c1, EventType: keyPressEvent,
 		OccurredAt: "2026-09-03T08:06:00+08:00",
@@ -797,3 +811,5 @@ func hasNotification(effects []*application.ApplicationEffect) bool {
 	}
 	return false
 }
+
+func (a *testApp) setNow(now time.Time) { a.clock.Store(now) }

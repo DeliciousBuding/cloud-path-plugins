@@ -9,7 +9,7 @@ requirements:
   - id: compartments
     capability: cloudpath.dev/capability/key@1
     cardinality: one-or-more
-    minItems: 3
+    minItems: 1
   - id: local-display
     capability: cloudpath.dev/capability/display-text@1
     cardinality: zero-or-one

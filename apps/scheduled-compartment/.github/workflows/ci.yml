@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   test:
-    name: build / vet / test / gofmt / manifest
+    name: build / vet / race test / gofmt / manifest
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +31,7 @@ jobs:
         run: go vet ./...
 
       - name: Test
-        run: go test ./... -count=1
+        run: go test -race ./... -count=1
 
       - name: gofmt gate
         run: test -z "$(gofmt -l .)"

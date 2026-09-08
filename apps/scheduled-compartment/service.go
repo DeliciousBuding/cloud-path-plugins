@@ -14,24 +14,28 @@ import (
 	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/status"
 )
 
-// Manifest identity of the reference application. These must mirror
-// examples/scheduled-compartment/plugin.yaml.
+// Manifest identity. These values must mirror plugin.yaml.
 const (
-	pluginIDValue   = "io.github.deliciousbuding.cloud-path-app-scheduled-compartment"
-	pluginVersion   = "0.2.2"
-	jobWindowCheck  = "window-check"
-	windowCheckCron = "* * * * *"
-	buzzerAction    = "buzzer"
-	displayCap      = "cloudpath.dev/capability/display-text@1"
-	buzzerCap       = "cloudpath.dev/capability/buzzer@1"
-	keyCap          = "cloudpath.dev/capability/key@1"
+	pluginIDValue    = "io.github.deliciousbuding.cloud-path-app-scheduled-compartment"
+	pluginVersion    = "0.2.3"
+	jobWindowCheck   = "window-check"
+	jobStartReminder = "start-reminder"
+	jobConfirmWindow = "confirm-window"
+	windowCheckCron  = "* * * * *"
+	buzzerAction     = "buzzer"
+	displayCap       = "cloudpath.dev/capability/display-text@1"
+	buzzerCap        = "cloudpath.dev/capability/buzzer@1"
+	keyCap           = "cloudpath.dev/capability/key@1"
 )
 
 // window state values stored in domain records.
 const (
-	windowOpened    = "opened"
-	windowCompleted = "completed"
-	windowMissed    = "missed"
+	windowOpened        = "opened"
+	windowCompleted     = "completed"
+	windowMissed        = "missed"
+	windowCompletedLate = "completed_late"
+	sourceManual        = "manual"
+	sourceSchedule      = "schedule"
 )
 
 // keyPressEvent is the event type delivered by the key@1 capability. A key
@@ -40,32 +44,42 @@ const (
 // in a Driver.
 const keyPressEvent = keyCap + "/press"
 
-// windowTrack is the in-memory runtime state for one scheduled window instance.
+// windowTrack is the in-memory state of one manual or daily reminder window.
 type windowTrack struct {
-	ID             string
-	Compartment    string
-	Start          time.Time
-	End            time.Time
-	State          string
-	OpenedAt       time.Time
-	ClosedAt       time.Time
-	ReminderEntity string
+	ID                 string
+	Source             string
+	ScheduleID         string
+	KeyEntity          string
+	ConfirmedAt        time.Time
+	ConfirmationSource string
+	MissedAt           time.Time
+	Compartment        string
+	CompartmentName    string
+	Start              time.Time
+	End                time.Time
+	State              string
+	OpenedAt           time.Time
+	ClosedAt           time.Time
+	ReminderEntity     string
 	// 提醒命令的最终回执（RequestCompleted）。空 = 尚无最终回执；
-	// 状态机不受它影响（只有按键完成窗口、窗口结束判 missed），
+	// 确认状态机不受它影响（按键或管理台确认、窗口结束判 missed），
 	// 但它让 missed 可区分「用户未响应」与「提醒从未送达设备」。
-	ReminderState  string
-	ReminderResult string
-	ReminderDoneAt time.Time
+	ReminderState     string
+	ReminderResult    string
+	ReminderErrorCode string
+	ReminderDoneAt    time.Time
 }
 
 // instanceState is the per-plugin-instance runtime state.
 type instanceState struct {
-	config    *Config
-	configRev uint32
-	bindings  map[string][]string
-	windows   map[string]*windowTrack
-	lastSeq   uint64
-	jobs      map[string]string // idempotency key -> result JSON
+	config            *Config
+	configRev         uint32
+	bindings          map[string][]string
+	windows           map[string]*windowTrack
+	lastSeq           uint64
+	jobs              map[string]jobOutcome // job + idempotency key -> input and result
+	deliveryUncertain bool
+	display           displayTrack
 }
 
 // Service implements the ApplicationService protocol for the Scheduled
@@ -77,6 +91,8 @@ type Service struct {
 	version   string
 	runtimeID string
 
+	// Serialize state transitions and their effect batches, including concurrent Jobs.
+	operationMu sync.Mutex
 	mu          sync.Mutex
 	initialized bool
 	closed      bool
@@ -103,6 +119,7 @@ func New() *Service {
 	return &Service{
 		pluginID:  pluginIDValue,
 		version:   pluginVersion,
+		runtimeID: fmt.Sprintf("scheduled-compartment-%d", time.Now().UnixNano()),
 		now:       time.Now,
 		instances: map[string]*instanceState{},
 	}
@@ -156,12 +173,10 @@ func (s *Service) Describe(context.Context) (*application.ApplicationDescriptor,
 		SchemaVersions: []string{application.SchemaVersion},
 		Requirements: []application.RequirementDescriptor{
 			{ID: "reminder-output", Capability: buzzerCap, Cardinality: "one"},
-			{ID: "compartments", Capability: keyCap, Cardinality: "one-or-more", MinItems: 3},
+			{ID: "compartments", Capability: keyCap, Cardinality: "one-or-more", MinItems: 1},
 			{ID: "local-display", Capability: displayCap, Cardinality: "zero-or-one"},
 		},
-		Jobs: []application.JobDescriptor{
-			{ID: jobWindowCheck, Title: "Check for missed windows", InputSchemaJSON: `{"type":"object","properties":{"window_id":{"type":"string"}}}`},
-		},
+		Jobs:            jobDescriptors(),
 		DeclarativeOnly: false,
 	}, nil
 }
@@ -182,6 +197,18 @@ func (s *Service) ConfigureInstance(_ context.Context, req *application.Configur
 
 	s.mu.Lock()
 	st := s.instance(req.PluginInstanceID)
+	boundCount := len(st.bindings["compartments"])
+	if len(st.bindings) != 0 && boundCount != len(cfg.Compartments) {
+		s.mu.Unlock()
+		return &application.ConfigureInstanceResponse{
+			PluginInstanceID: req.PluginInstanceID,
+			Status:           status.Errorf(status.CodeInvalidArgument, "configured compartments (%d) must match existing compartment bindings (%d)", len(cfg.Compartments), boundCount),
+		}, nil
+	}
+	if activeCount(st) > 0 && !sameCompartmentOrder(st.config, &cfg) {
+		s.mu.Unlock()
+		return &application.ConfigureInstanceResponse{PluginInstanceID: req.PluginInstanceID, Status: status.Errorf(status.CodeFailedPrecondition, "cannot reorder compartments while a window is open")}, nil
+	}
 	st.config = &cfg
 	st.configRev = req.ConfigRevision
 	s.mu.Unlock()
@@ -199,13 +226,18 @@ func (s *Service) ValidateBinding(_ context.Context, req *application.ValidateBi
 	if req == nil {
 		return nil, status.Errorf(status.CodeInvalidArgument, "nil validate request")
 	}
-	issues := validateBindings(req.Bindings)
+	s.mu.Lock()
+	st := s.instance(req.PluginInstanceID)
+	issues := validateBindings(req.Bindings, st.config)
+	proposed := groupBindings(req.Bindings)
+	if activeCount(st) > 0 && !sameStrings(st.bindings["compartments"], proposed["compartments"]) {
+		issues = append(issues, application.BindingIssue{RequirementID: "compartments", Severity: "error", Message: "cannot rebind compartment keys while a window is open"})
+	}
 	valid := len(issues) == 0
 	if valid {
-		s.mu.Lock()
-		s.instance(req.PluginInstanceID).bindings = groupBindings(req.Bindings)
-		s.mu.Unlock()
+		st.bindings = proposed
 	}
+	s.mu.Unlock()
 	return &application.ValidateBindingResponse{Valid: valid, Issues: issues}, nil
 }
 
@@ -258,31 +290,30 @@ func (s *Service) handleEvent(ev *application.ApplicationEvent) error {
 	if ev == nil || ev.Union == nil {
 		return nil
 	}
-	instanceID := ev.PluginInstanceID
-
+	s.operationMu.Lock()
+	defer s.operationMu.Unlock()
 	s.mu.Lock()
-	st := s.instance(instanceID)
-	if ev.Sequence != 0 {
-		if ev.Sequence <= st.lastSeq {
-			s.mu.Unlock()
-			return nil // duplicate event; idempotent
-		}
-		st.lastSeq = ev.Sequence
+	st := s.instance(ev.PluginInstanceID)
+	if ev.Sequence != 0 && ev.Sequence <= st.lastSeq {
+		s.mu.Unlock()
+		return nil
 	}
 	s.mu.Unlock()
-
+	var err error
 	switch u := ev.Union.(type) {
 	case *application.ScheduleTick:
-		return s.onScheduleTick(instanceID, u)
+		err = s.onScheduleTick(ev.PluginInstanceID, u)
 	case *application.CapabilityEvent:
-		return s.onCapabilityEvent(instanceID, u)
+		err = s.onCapabilityEvent(ev.PluginInstanceID, u)
 	case *application.RequestCompleted:
-		return s.onRequestCompleted(instanceID, u)
-	case *application.InstanceLifecycle:
-		return nil
-	default:
-		return nil
+		err = s.onRequestCompleted(ev.PluginInstanceID, u)
 	}
+	if err == nil && ev.Sequence != 0 {
+		s.mu.Lock()
+		st.lastSeq = ev.Sequence
+		s.mu.Unlock()
+	}
+	return err
 }
 
 func (s *Service) onScheduleTick(instanceID string, tick *application.ScheduleTick) error {
@@ -291,28 +322,22 @@ func (s *Service) onScheduleTick(instanceID string, tick *application.ScheduleTi
 	}
 	w, err := parseWindowTick(tick.WindowJSON)
 	if err != nil {
-		return nil // malformed schedule tick is ignored, never crashes the stream
+		return nil
 	}
-
 	s.mu.Lock()
 	st := s.instance(instanceID)
-	if st.config == nil {
+	now := s.now().UTC()
+	if st.config == nil || st.windows[w.ID] != nil || !st.config.hasCompartment(w.Compartment) || now.Before(w.Start) {
 		s.mu.Unlock()
-		return nil // not configured yet
+		return nil
 	}
-	if _, exists := st.windows[w.ID]; exists {
+	if err := s.readyForEffects(instanceID, st); err != nil {
 		s.mu.Unlock()
-		return nil // already tracked; idempotent
+		return err
 	}
-	if !st.config.hasCompartment(w.Compartment) {
-		s.mu.Unlock()
-		return nil // unknown compartment
-	}
-	w.ReminderEntity = reminderEntity(st)
-	st.windows[w.ID] = w
-	effects := s.windowStartEffects(st, w)
+	effects := s.startWindow(st, w, now)
+	effects = append(effects, s.displayEffects(instanceID, st)...)
 	s.mu.Unlock()
-
 	return s.flush(instanceID, effects)
 }
 
@@ -328,36 +353,44 @@ func (s *Service) onCapabilityEvent(instanceID string, ev *application.Capabilit
 	}
 }
 
-// onKeyEvent interprets a key press on a bound compartment entity as the user
-// confirming that compartment. The business meaning of the generic key@1
-// event lives entirely here.
+// onKeyEvent records a user's collection confirmation, never ingestion. An
+// event can only target a window that had started when that key was pressed.
+// The newest matching window wins; completed windows block fallback to older
+// missed windows, so a duplicate press cannot acknowledge a different dose.
 func (s *Service) onKeyEvent(instanceID string, ev *application.CapabilityEvent) error {
+	if ev.RequirementID != "compartments" {
+		return nil
+	}
+	at := parseOccurred(ev.OccurredAt)
 	s.mu.Lock()
 	st := s.instance(instanceID)
 	compID := keyToCompartment(st, ev.EntityID)
-	if compID == "" {
+	if compID == "" || at.IsZero() || at.After(s.now()) {
 		s.mu.Unlock()
-		return nil // not a bound compartment entity
+		return nil
 	}
-	var active *windowTrack
+	var selected *windowTrack
 	for _, w := range st.windows {
-		if w.Compartment == compID && w.State == windowOpened {
-			active = w
-			break
+		if w.Compartment != compID || w.KeyEntity != ev.EntityID || at.Before(w.Start) || (!w.OpenedAt.IsZero() && at.Before(w.OpenedAt)) {
+			continue
+		}
+		if selected == nil || w.Start.After(selected.Start) || (w.Start.Equal(selected.Start) && w.ID > selected.ID) {
+			selected = w
 		}
 	}
-	if active == nil {
+	if selected == nil || selected.State == windowCompleted || selected.State == windowCompletedLate {
 		s.mu.Unlock()
-		return nil // no active window for this compartment; idempotent
+		return nil
 	}
-	active.State = windowCompleted
-	active.ClosedAt = parseOccurred(ev.OccurredAt)
-	effects := []application.ApplicationEffectUnion{
-		windowRecord(active),
-		cancelTaskEffect(active.ID),
+	if err := s.readyForEffects(instanceID, st); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	effects := confirmWindow(selected, at, "key")
+	if len(effects) != 0 {
+		effects = append(effects, s.displayEffects(instanceID, st)...)
 	}
 	s.mu.Unlock()
-
 	return s.flush(instanceID, effects)
 }
 
@@ -366,43 +399,45 @@ func (s *Service) onKeyEvent(instanceID string, ev *application.CapabilityEvent)
 const reminderRequestPrefix = "reminder-"
 
 func (s *Service) onRequestCompleted(instanceID string, ev *application.RequestCompleted) error {
-	// RequestCompleted 关闭提醒命令生命周期。状态机不受影响：只有按键
-	// 完成窗口、window-check job 判 missed——但命令结局必须持久化到窗口
-	// 记录，否则 missed 无法区分「用户未响应」与「提醒从未送达设备」。
-	if ev == nil || !strings.HasPrefix(ev.RequestID, reminderRequestPrefix) {
+	if ev == nil {
 		return nil
 	}
-	var reminderState string
-	switch ev.State {
-	case application.CommandStateSucceeded:
-		reminderState = "succeeded"
-	case application.CommandStateFailed:
-		reminderState = "failed"
-	case application.CommandStateTimedOut:
-		reminderState = "timedout"
-	default:
-		return nil // 中间态不出现在 RequestCompleted；窗口记录保持不变
+	if strings.HasPrefix(ev.RequestID, displayRequestPrefix) {
+		return s.onDisplayCompleted(instanceID, ev)
 	}
-	windowID := strings.TrimPrefix(ev.RequestID, reminderRequestPrefix)
-
+	if !strings.HasPrefix(ev.RequestID, reminderRequestPrefix) {
+		return nil
+	}
+	reminderState := terminalCommandState(ev.State)
+	if reminderState == "" {
+		return nil
+	} // accepted/running is not success
 	s.mu.Lock()
 	st := s.instance(instanceID)
-	w := st.windows[windowID]
-	if w == nil {
+	w := st.windows[strings.TrimPrefix(ev.RequestID, reminderRequestPrefix)]
+	if w == nil || w.ReminderState != "pending" || ev.EntityID != w.ReminderEntity || ev.Action != buzzerAction {
 		s.mu.Unlock()
-		return nil // 未知窗口（已重启丢失或伪 RequestID）：幂等忽略
+		return nil // unrelated, duplicate or conflicting terminal receipt
+	}
+	if err := s.readyForEffects(instanceID, st); err != nil {
+		s.mu.Unlock()
+		return err
 	}
 	w.ReminderState = reminderState
 	w.ReminderResult = ev.ResultJSON
+	w.ReminderErrorCode = ev.ErrorCode
 	w.ReminderDoneAt = s.now()
 	effects := []application.ApplicationEffectUnion{windowRecord(w)}
 	s.mu.Unlock()
-
 	return s.flush(instanceID, effects)
 }
+
 func (s *Service) flush(instanceID string, effects []application.ApplicationEffectUnion) error {
 	for _, u := range effects {
 		if err := s.sendEffect(instanceID, u); err != nil {
+			s.mu.Lock()
+			s.instance(instanceID).deliveryUncertain = true
+			s.mu.Unlock()
 			return err
 		}
 	}
@@ -420,7 +455,7 @@ func (s *Service) sendEffect(instanceID string, union application.ApplicationEff
 	seq := s.effectSeq
 	s.mu.Unlock()
 	if writer == nil {
-		return nil // no active stream for this instance; nothing to emit
+		return status.Errorf(status.CodeUnavailable, "instance has no active event/effect stream")
 	}
 	eff := &application.ApplicationEffect{
 		PluginInstanceID: instanceID,
@@ -452,12 +487,16 @@ func (s *Service) HandleRequest(_ context.Context, req *application.PluginHTTPRe
 	if req.Method == "GET" {
 		statusBody := map[string]any{
 			"instance_id": req.Context.InstanceID,
+			"display":     displayData(st),
 		}
 		if st.config != nil {
 			statusBody["timezone"] = st.config.Timezone
 			statusBody["compartments"] = len(st.config.Compartments)
 			statusBody["windows"] = len(st.windows)
 			statusBody["active"] = activeCount(st)
+			statusBody["window_details"] = recentWindowData(st, 100)
+			statusBody["runtime_state_persistent"] = false
+			statusBody["effects_delivery_uncertain"] = st.deliveryUncertain
 		} else {
 			statusBody["configured"] = false
 		}
@@ -474,59 +513,6 @@ func (s *Service) HandleRequest(_ context.Context, req *application.PluginHTTPRe
 	}, nil
 }
 
-// RunJob executes the window-check job. It scans active windows against the
-// (injectable) clock and emits a missed domain record for any that have
-// expired without completing. RunJob is idempotent per IdempotencyKey.
-func (s *Service) RunJob(_ context.Context, req *application.RunJobRequest) (*application.RunJobResponse, error) {
-	if req == nil {
-		return nil, status.Errorf(status.CodeInvalidArgument, "nil job request")
-	}
-	if req.JobID != jobWindowCheck {
-		return nil, status.Errorf(status.CodeUnimplemented, "job %q is not implemented", req.JobID)
-	}
-
-	s.mu.Lock()
-	if s.closed {
-		s.mu.Unlock()
-		return nil, status.Errorf(status.CodeUnavailable, "plugin is shutting down")
-	}
-	st := s.instance(req.PluginInstanceID)
-	if st.config == nil {
-		s.mu.Unlock()
-		return &application.RunJobResponse{JobID: req.JobID, Status: status.New(), ResultJSON: resultJSON(nil)}, nil
-	}
-	if req.IdempotencyKey != "" {
-		if prev, ok := st.jobs[req.IdempotencyKey]; ok {
-			s.mu.Unlock()
-			return &application.RunJobResponse{JobID: req.JobID, Status: status.New(), ResultJSON: prev}, nil
-		}
-	}
-
-	now := s.now()
-	var missed []string
-	var effects []application.ApplicationEffectUnion
-	for id, w := range st.windows {
-		if w.State == windowOpened && !now.Before(w.End) {
-			w.State = windowMissed
-			missed = append(missed, id)
-			effects = append(effects, windowRecord(w), cancelTaskEffect(w.ID), missedNotificationEffect(w))
-		}
-	}
-	sort.Strings(missed)
-	body := resultJSON(missed)
-	if req.IdempotencyKey != "" {
-		st.jobs[req.IdempotencyKey] = body
-	}
-	s.mu.Unlock()
-
-	for _, u := range effects {
-		if err := s.sendEffect(req.PluginInstanceID, u); err != nil {
-			return nil, err
-		}
-	}
-	return &application.RunJobResponse{JobID: req.JobID, Status: status.New(), ResultJSON: body}, nil
-}
-
 // Health reports serving state per configured instance.
 func (s *Service) Health(context.Context) (*application.HealthResponse, error) {
 	s.mu.Lock()
@@ -536,8 +522,12 @@ func (s *Service) Health(context.Context) (*application.HealthResponse, error) {
 		state = application.HealthStateNotServing
 	}
 	insts := make([]application.InstanceHealth, 0, len(s.instances))
-	for id := range s.instances {
-		insts = append(insts, application.InstanceHealth{PluginInstanceID: id, State: state})
+	for id, st := range s.instances {
+		instanceState := state
+		if st.deliveryUncertain {
+			instanceState = application.HealthStateNotServing
+		}
+		insts = append(insts, application.InstanceHealth{PluginInstanceID: id, State: instanceState})
 	}
 	return &application.HealthResponse{State: state, Instances: insts}, nil
 }
@@ -563,7 +553,7 @@ func (s *Service) instance(id string) *instanceState {
 		st = &instanceState{
 			bindings: map[string][]string{},
 			windows:  map[string]*windowTrack{},
-			jobs:     map[string]string{},
+			jobs:     map[string]jobOutcome{},
 		}
 		s.instances[id] = st
 	}
@@ -573,7 +563,7 @@ func (s *Service) instance(id string) *instanceState {
 func (s *Service) windowStartEffects(st *instanceState, w *windowTrack) []application.ApplicationEffectUnion {
 	effects := []application.ApplicationEffectUnion{windowRecord(w)}
 	if w.ReminderEntity != "" {
-		policy := Reminder{Freq: 1, Duration: 1}
+		policy := defaultReminder
 		if st != nil && st.config != nil {
 			policy = st.config.ResolvedReminder()
 		}
@@ -581,12 +571,12 @@ func (s *Service) windowStartEffects(st *instanceState, w *windowTrack) []applic
 			EntityID:       w.ReminderEntity,
 			Action:         buzzerAction,
 			ArgsJSON:       mustJSON(map[string]int{"freq": policy.Freq, "duration": policy.Duration}),
-			IdempotencyKey: "reminder-" + w.ID,
-			Deadline:       w.End.UTC().Format(time.RFC3339),
+			IdempotencyKey: reminderRequestPrefix + w.ID,
+			Deadline:       w.End.UTC().Format(time.RFC3339Nano),
 		})
 	}
 	effects = append(effects, &application.ScheduleTask{
-		ScheduleID:  "window-check-" + w.ID,
+		ScheduleID:  windowTaskID(w.ID),
 		Cron:        windowCheckCron,
 		PayloadJSON: mustJSON(map[string]any{"window_id": w.ID}),
 	})
@@ -596,7 +586,7 @@ func (s *Service) windowStartEffects(st *instanceState, w *windowTrack) []applic
 // validateBindings enforces the declared requirement cardinalities and rejects
 // any requirement id that is not part of this application (which structurally
 // rules out Driver coupling).
-func validateBindings(bindings []application.Binding) []application.BindingIssue {
+func validateBindings(bindings []application.Binding, cfg *Config) []application.BindingIssue {
 	allowed := map[string]struct{}{"reminder-output": {}, "compartments": {}, "local-display": {}}
 	counts := map[string]int{}
 	entityOK := map[string]bool{}
@@ -641,12 +631,17 @@ func validateBindings(bindings []application.Binding) []application.BindingIssue
 			Message:       fmt.Sprintf("reminder-output requires exactly one binding, got %d", counts["reminder-output"]),
 		})
 	}
-	if counts["compartments"] < 3 {
+	if counts["compartments"] < 1 {
 		issues = append(issues, application.BindingIssue{
 			RequirementID: "compartments",
 			Severity:      "error",
-			Message:       fmt.Sprintf("compartments requires at least 3 bindings, got %d", counts["compartments"]),
+			Message:       fmt.Sprintf("compartments requires at least 1 binding, got %d", counts["compartments"]),
 		})
+	}
+	if cfg == nil {
+		issues = append(issues, application.BindingIssue{RequirementID: "compartments", Severity: "error", Message: "configure the instance before validating bindings"})
+	} else if counts["compartments"] != len(cfg.Compartments) {
+		issues = append(issues, application.BindingIssue{RequirementID: "compartments", Severity: "error", Message: fmt.Sprintf("compartment bindings (%d) must exactly match configured compartments (%d), in config order", counts["compartments"], len(cfg.Compartments))})
 	}
 	if counts["local-display"] > 1 {
 		issues = append(issues, application.BindingIssue{
@@ -685,26 +680,25 @@ func reminderEntity(st *instanceState) string {
 	return ""
 }
 
+// keyToCompartment maps a bound key entity to its configured compartment by
+// binding order. The application gives business meaning to the key: the
+// Driver only reports a generic key press.
 func keyToCompartment(st *instanceState, entity string) string {
 	if st == nil || st.config == nil {
 		return ""
 	}
 	keys := st.bindings["compartments"]
 	comps := st.config.Compartments
+	if len(keys) != len(comps) {
+		return ""
+	}
 	for i, c := range keys {
-		if i >= len(comps) {
-			break
-		}
 		if c == entity {
 			return comps[i].ID
 		}
 	}
 	return ""
 }
-
-// keyToCompartment maps a bound key entity to its configured compartment by
-// binding order. The application gives business meaning to the key: the
-// Driver only reports a generic key press.
 
 func activeCount(st *instanceState) int {
 	n := 0
@@ -733,8 +727,8 @@ func parseWindowTick(raw string) (*windowTrack, error) {
 		return nil, err
 	}
 	id := strings.TrimSpace(t.ID)
-	if id == "" {
-		return nil, fmt.Errorf("window id is required")
+	if id == "" || len(id) > maxLocalIDBytes {
+		return nil, fmt.Errorf("window spec id must be 1-128 UTF-8 bytes")
 	}
 	comp := strings.TrimSpace(t.Compartment)
 	if comp == "" {
@@ -751,7 +745,7 @@ func parseWindowTick(raw string) (*windowTrack, error) {
 	if !end.After(start) {
 		return nil, fmt.Errorf("window end must be after start")
 	}
-	return &windowTrack{ID: id, Compartment: comp, Start: start, End: end, State: windowOpened}, nil
+	return &windowTrack{ID: scheduleOccurrenceID(id, start), ScheduleID: id, Source: sourceSchedule, Compartment: comp, Start: start, End: end}, nil
 }
 
 func parseOccurred(s string) time.Time {
@@ -763,35 +757,46 @@ func parseOccurred(s string) time.Time {
 }
 
 func windowRecord(w *windowTrack) *application.UpsertDomainRecord {
-	data := map[string]any{
-		"id":               w.ID,
-		"compartment":      w.Compartment,
-		"start":            w.Start.UTC().Format(time.RFC3339),
-		"end":              w.End.UTC().Format(time.RFC3339),
-		"state":            w.State,
-		"opened_at":        optTime(w.OpenedAt),
-		"closed_at":        optTime(w.ClosedAt),
-		"reminder_entity":  w.ReminderEntity,
-		"reminder_state":   w.ReminderState,
-		"reminder_result":  w.ReminderResult,
-		"reminder_done_at": optTime(w.ReminderDoneAt),
-	}
-	return &application.UpsertDomainRecord{
-		RecordType: "window",
-		RecordID:   w.ID,
-		DataJSON:   mustJSON(data),
-		Version:    "1",
+	data := windowData(w)
+	return &application.UpsertDomainRecord{RecordType: "window", RecordID: w.ID, DataJSON: mustJSON(data), Version: "1"}
+}
+
+func windowData(w *windowTrack) map[string]any {
+	title, summary := windowPresentation(w)
+	return map[string]any{
+		"title":               title,
+		"summary":             summary,
+		"compartment_name":    w.CompartmentName,
+		"source":              w.Source,
+		"schedule_id":         w.ScheduleID,
+		"key_entity":          w.KeyEntity,
+		"confirmed_at":        optTime(w.ConfirmedAt),
+		"confirmation_source": w.ConfirmationSource,
+		"missed_at":           optTime(w.MissedAt),
+		"reminder_request_id": reminderRequestID(w),
+		"reminder_error_code": w.ReminderErrorCode,
+		"id":                  w.ID,
+		"compartment":         w.Compartment,
+		"start":               w.Start.UTC().Format(time.RFC3339Nano),
+		"end":                 w.End.UTC().Format(time.RFC3339Nano),
+		"state":               w.State,
+		"opened_at":           optTime(w.OpenedAt),
+		"closed_at":           optTime(w.ClosedAt),
+		"reminder_entity":     w.ReminderEntity,
+		"reminder_state":      w.ReminderState,
+		"reminder_result":     w.ReminderResult,
+		"reminder_done_at":    optTime(w.ReminderDoneAt),
 	}
 }
 
 func cancelTaskEffect(windowID string) *application.CancelScheduledTask {
-	return &application.CancelScheduledTask{ScheduleID: "window-check-" + windowID}
+	return &application.CancelScheduledTask{ScheduleID: windowTaskID(windowID)}
 }
 
 func missedNotificationEffect(w *windowTrack) *application.SendNotification {
 	return &application.SendNotification{
-		Title:    "Scheduled window missed",
-		Body:     fmt.Sprintf("Window %s for compartment %s was not completed in time", w.ID, w.Compartment),
+		Title:    "取药窗口到期，尚未确认",
+		Body:     fmt.Sprintf("Window %s for compartment %s has no on-time collection confirmation; this does not establish whether medication was taken", w.ID, w.Compartment),
 		Severity: "warning",
 	}
 }
@@ -807,7 +812,7 @@ func optTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
-	return t.UTC().Format(time.RFC3339)
+	return t.UTC().Format(time.RFC3339Nano)
 }
 
 func mustJSON(v any) string {
@@ -816,4 +821,49 @@ func mustJSON(v any) string {
 		return "{}"
 	}
 	return string(b)
+}
+
+func sameStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func sameCompartmentOrder(a, b *Config) bool {
+	if a == nil || b == nil || len(a.Compartments) != len(b.Compartments) {
+		return false
+	}
+	for i := range a.Compartments {
+		if a.Compartments[i].ID != b.Compartments[i].ID {
+			return false
+		}
+	}
+	return true
+}
+
+func recentWindowData(st *instanceState, limit int) []map[string]any {
+	windows := make([]*windowTrack, 0, len(st.windows))
+	for _, w := range st.windows {
+		windows = append(windows, w)
+	}
+	sort.Slice(windows, func(i, j int) bool {
+		if windows[i].Start.Equal(windows[j].Start) {
+			return windows[i].ID > windows[j].ID
+		}
+		return windows[i].Start.After(windows[j].Start)
+	})
+	if len(windows) > limit {
+		windows = windows[:limit]
+	}
+	out := make([]map[string]any, 0, len(windows))
+	for _, w := range windows {
+		out = append(out, windowData(w))
+	}
+	return out
 }

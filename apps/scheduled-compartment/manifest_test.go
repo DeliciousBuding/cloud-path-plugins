@@ -2,6 +2,7 @@ package scheduledcompartment
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"strconv"
 	"strings"
@@ -42,6 +43,7 @@ func TestManifestMachineIdentity(t *testing.T) {
 		"id: " + pluginIDValue,
 		"version: " + pluginVersion,
 		"protocol: 1",
+		`core: ">=0.2.15 <0.3.0"`,
 		"entrypoint: " + entrypointBinary,
 		"- id: " + contributionID,
 	} {
@@ -169,7 +171,25 @@ func TestManifestRequirementsMirror(t *testing.T) {
 			t.Fatalf("descriptor requirement %q MinItems = %d, manifest = %d", r.ID, r.MinItems, wantMin)
 		}
 	}
-	if len(desc.Jobs) != 1 || desc.Jobs[0].ID != jobWindowCheck {
-		t.Fatalf("descriptor jobs = %+v, want a single %q job", desc.Jobs, jobWindowCheck)
+	if len(desc.Jobs) != 3 {
+		t.Fatalf("expected three jobs, got %+v", desc.Jobs)
+	}
+	expected := map[string]bool{jobWindowCheck: false, jobStartReminder: true, jobConfirmWindow: true}
+	for _, job := range desc.Jobs {
+		manual, ok := expected[job.ID]
+		if !ok || job.ManualOnly != manual || strings.TrimSpace(job.Title) == "" {
+			t.Fatalf("invalid job descriptor: %+v", job)
+		}
+		delete(expected, job.ID)
+		var schema map[string]any
+		if err := json.Unmarshal([]byte(job.InputSchemaJSON), &schema); err != nil || schema["type"] != "object" {
+			t.Fatalf("invalid job schema: %+v, err=%v", job, err)
+		}
+	}
+	if len(expected) != 0 {
+		t.Fatalf("missing jobs: %v", expected)
+	}
+	if !strings.Contains(repoFile(t, "go.mod"), "github.com/DeliciousBuding/cloud-path v0.2.15") {
+		t.Fatal("SDK dependency must match the minimum Core version")
 	}
 }
