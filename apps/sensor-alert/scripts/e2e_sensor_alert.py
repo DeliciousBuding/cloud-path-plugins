@@ -6,8 +6,9 @@ the CloudPath REST API, creates a unique isolated plugin instance, and asks the
 operator to produce the physical sensor change. It never opens a serial port.
 
 Default invocation is a dry-run. Real execution requires --execute, a TTY, and
-an explicit confirmation phrase. Credentials are read from environment variables
-or a key=value file and are never printed.
+an explicit confirmation phrase. This acceptance path is deliberately LED-only:
+it never binds alert-sound and never sends tone/buzzer commands. Credentials are
+read from environment variables or a key=value file and are never printed.
 """
 from __future__ import annotations
 
@@ -35,7 +36,7 @@ def manifest_defaults():
         manifest = json.loads(PLUGIN_FILE.read_text(encoding="utf-8"))
         return str(manifest["id"]), str(manifest["version"])
     except (OSError, KeyError, TypeError, ValueError):
-        return "io.github.deliciousbuding.cloud-path-app-sensor-alert", "0.1.0"
+        return "io.github.deliciousbuding.cloud-path-app-sensor-alert", "0.1.1"
 
 
 PLUGIN_ID, PLUGIN_VERSION = manifest_defaults()
@@ -52,7 +53,6 @@ SENSOR_REQUIREMENT = {
     "contact": "contact",
     "vibration": "vibration",
 }
-BUZZER_CAPABILITY = "cloudpath.dev/capability/buzzer@1"
 LED_CAPABILITY = "cloudpath.dev/capability/led@1"
 
 
@@ -185,27 +185,6 @@ def parse_json(value, fallback):
         return fallback
 
 
-def capability_id(capability):
-    if not isinstance(capability, dict):
-        return ""
-    metadata = capability.get("metadata")
-    if isinstance(metadata, dict) and metadata.get("id"):
-        return str(metadata["id"])
-    return str(capability.get("id") or capability.get("capability") or "")
-
-
-def capability_actions(capability):
-    if not isinstance(capability, dict):
-        return set()
-    spec = capability.get("spec") if isinstance(capability.get("spec"), dict) else {}
-    actions = spec.get("actions", capability.get("actions", {}))
-    if isinstance(actions, dict):
-        return set(str(key) for key in actions)
-    if isinstance(actions, list):
-        return set(str(item.get("name")) for item in actions if isinstance(item, dict) and item.get("name"))
-    return set()
-
-
 def choose_entity(descriptor, capability, override, label):
     entities = descriptor.get("entities", []) if isinstance(descriptor, dict) else []
     if override:
@@ -253,9 +232,9 @@ def build_config(args, device, sensor_entity):
         "contact_enabled": False,
         "vibration_enabled": False,
         "cooldown_s": 0,
-        "silent": False,
+        "silent": True,
         "alert_led_mask": 85,
-        "alert_tone": {"frequency_hz": args.tone_frequency, "duration_ms": args.tone_duration_ms},
+        "alert_tone": None,
     }
     if args.sensor == "temperature":
         current = numeric_state(device, sensor_entity, "value", "temperature")
@@ -464,23 +443,13 @@ def execute(args):
             raise RuntimeError("target device is offline: %s" % device_key(edge, device))
         descriptor_response = api.get(device_path(edge, device) + "/descriptor")
         descriptor = descriptor_response.get("descriptor", {})
-        catalog = descriptor_response.get("capabilities", [])
         sensor_entity = choose_entity(descriptor, SENSOR_CAPABILITY[args.sensor], args.sensor_entity, "sensor")
-        buzzer_entity = choose_entity(descriptor, BUZZER_CAPABILITY, args.buzzer_entity, "buzzer")
         led_entity = choose_entity(descriptor, LED_CAPABILITY, args.led_entity, "LED")
-        tone_actions = set()
-        for capability in catalog:
-            if capability_id(capability) == BUZZER_CAPABILITY:
-                tone_actions = capability_actions(capability)
-                break
-        if tone_actions and "tone" not in tone_actions:
-            raise RuntimeError("buzzer capability does not declare tone: %s" % sorted(tone_actions))
         cfg = build_config(args, device_view, sensor_entity)
         evidence["config"] = cfg
-        evidence["entities"] = {"sensor": sensor_entity, "buzzer": buzzer_entity, "led": led_entity}
+        evidence["entities"] = {"sensor": sensor_entity, "led": led_entity}
         bindings = [
             {"requirement_id": SENSOR_REQUIREMENT[args.sensor], "entity_id": sensor_entity},
-            {"requirement_id": "alert-sound", "entity_id": buzzer_entity},
             {"requirement_id": "alert-light", "entity_id": led_entity},
         ]
         payload = {
@@ -509,13 +478,15 @@ def execute(args):
         operator_confirm(trigger_instruction(args, cfg))
         triggered = wait_alert_state(api, instance_id, "triggered", args.sensor, args.action_timeout)
         evidence["triggered_record"] = triggered
-        tone = wait_acked_command(
-            api, edge, device, baseline, "tone",
-            {"frequency_hz": args.tone_frequency, "duration_ms": args.tone_duration_ms},
-            args.timeout,
-        )
         led = wait_acked_command(api, edge, device, baseline, "led", {"mask": cfg["alert_led_mask"]}, args.timeout)
-        evidence["trigger_commands"] = {"tone": tone, "led": led}
+        time.sleep(1.0)
+        audible = [
+            row for row in list_commands(api, edge, device)
+            if int(row.get("id", 0)) > baseline and row.get("cmd") in ("tone", "buzzer")
+        ]
+        if audible:
+            raise RuntimeError("LED-only E2E detected audible commands: %s" % audible)
+        evidence["trigger_commands"] = {"led": led, "audible": []}
         evidence["request_completed_status"] = wait_settled_status(api, instance_id, args.timeout)
 
         baseline_after_trigger = max_command_id(list_commands(api, edge, device))
@@ -587,10 +558,7 @@ def parse_args():
     parser.add_argument("--sensor", choices=sorted(SENSOR_CAPABILITY), default="vibration")
     parser.add_argument("--direction", choices=("high", "low"), default="high", help="threshold direction for temperature/illuminance")
     parser.add_argument("--sensor-entity", help="override discovered sensor entity id")
-    parser.add_argument("--buzzer-entity", help="override discovered buzzer entity id")
     parser.add_argument("--led-entity", help="override discovered LED entity id")
-    parser.add_argument("--tone-frequency", type=int, default=880)
-    parser.add_argument("--tone-duration-ms", type=int, default=100)
     parser.add_argument("--recovery-mode", choices=("disarm", "recover"), default="disarm")
     parser.add_argument("--timeout", type=float, default=90.0, help="API/effect timeout in seconds")
     parser.add_argument("--action-timeout", type=float, default=120.0, help="physical action timeout in seconds")
@@ -606,6 +574,7 @@ def main():
         print("DRY-RUN: no API calls, no real-board action.")
         print("Planned isolated instance: %s" % (args.instance_id or "sensor-alert-e2e-<timestamp>"))
         print("Planned sensor: %s (%s)" % (args.sensor, args.direction))
+        print("Audible output: disabled (silent=true, alert_tone=null, no alert-sound binding)")
         print("Required env: CLOUDPATH_BASE_URL, CLOUDPATH_E2E_DEVICE, CLOUDPATH_ADMIN_USERNAME, CLOUDPATH_ADMIN_PASSWORD")
         print("Run with --execute in an interactive terminal to perform the physical E2E.")
         return 0

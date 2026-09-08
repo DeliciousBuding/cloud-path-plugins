@@ -166,6 +166,21 @@ func sameFloat(a, b *float64) bool {
 	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
 }
 
+func (c Config) sensorEnabled(role string) bool {
+	switch role {
+	case TemperatureRequirement:
+		return true
+	case IlluminanceRequirement:
+		return c.LightMin != nil || c.LightMax != nil
+	case ContactRequirement:
+		return c.ContactEnabled
+	case VibrationRequirement:
+		return c.VibrationEnabled
+	default:
+		return false
+	}
+}
+
 func (c Config) sameAs(other Config) bool {
 	return c.TemperatureMin == other.TemperatureMin &&
 		c.TemperatureMax == other.TemperatureMax &&

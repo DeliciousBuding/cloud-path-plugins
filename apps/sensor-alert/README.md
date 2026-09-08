@@ -2,7 +2,7 @@
 
 `io.github.deliciousbuding.cloud-path-app-sensor-alert` 是一个设备无关的 CloudPath Application Plugin。它只消费绑定实体的观测和 CapabilityEvent，再通过领域记录与通用 `tone` / `led` 命令表达告警动作，不打开串口、不访问网络、不烧录固件。
 
-版本：`0.1.0`
+版本：`0.1.1`
 Application Protocol：`1`
 最低 Core：`0.2.15`
 
@@ -78,6 +78,7 @@ armed/triggered/recovered --disarm--> disarmed
 - 同一条件在 `cooldown_s` 内只触发一次；不同条件可以独立触发。
 - `silent=true` 只抑制 sound，不影响领域记录和 light。
 - 多条件同时活动时，只有所有活动条件恢复后才进入 `recovered`。
+- 配置更新不会抹掉未恢复的活动告警；仍启用的活动条件保留，待下一次观测决定恢复或继续触发。
 - `arm` / `disarm` 按实例幂等；不同 `plugin_instance_id` 的状态、冷却、命令和 effect writer 完全隔离。
 
 ### alert domain record
@@ -144,6 +145,7 @@ python scripts/validate_manifest.py plugin.yaml --dir .
 
 - 只走 CloudPath REST API；不直接打开 COM 口、不启动/停止 Edge、不烧录；
 - 默认是 dry-run，必须显式 `--execute`，且要求交互式 TTY 和确认短语；
+- 验收路径强制 `silent=true`、`alert_tone=null`，不绑定 `alert-sound`，只验证记录与 LED；脚本会断言本次命令窗口内没有 `tone`/`buzzer` 命令；
 - 创建唯一的隔离实例，结束执行 `disarm` 并删除该实例；清理失败会以非零退出并写入 `cleanup_errors`，`--keep-instance` 仅用于排障；
 - 凭据来自环境变量或 `--credentials-file`，脚本不打印凭据；
 - 证据默认写入 gitignored 的 `.local/validation/`。
@@ -156,7 +158,7 @@ export CLOUDPATH_E2E_DEVICE=<edge-id>/<device-id>
 python scripts/e2e_sensor_alert.py --execute --sensor contact --recovery-mode disarm --credentials-file <path-to-key-value-file>
 ```
 
-`--sensor` 支持 `temperature`、`illuminance`、`contact`、`vibration`。脚本会等待 domain record 进入 `triggered`，再等待 `tone` 和 `led` 的 device ACK，并通过 `status` job 确认 `RequestCompleted` 已清空 pending；随后按 `--recovery-mode` 验证 `recover` 或 `disarm` 的 LED off。若同租户已有实例独占 buzzer/LED，创建或绑定会失败；脚本不会自动停用其他实例，需操作者先显式释放执行器。
+`--sensor` 支持 `temperature`、`illuminance`、`contact`、`vibration`。脚本会等待 domain record 进入 `triggered`，再等待 `led` 的 device ACK，并通过 `status` job 确认 `RequestCompleted` 已清空 pending；随后按 `--recovery-mode` 验证 `recover` 或 `disarm` 的 LED off。该脚本不验证 `tone`，也不占用 buzzer 执行器。若同租户已有实例独占 LED，创建或绑定会失败；脚本不会自动停用其他实例，需操作者先显式释放执行器。
 
 ## 限制
 
@@ -164,5 +166,5 @@ python scripts/e2e_sensor_alert.py --execute --sensor contact --recovery-mode di
 - 不持久化进程内状态；插件重启后需要重新 configure/bind/arm，Core 的 desired state 与记录仍由平台管理。
 - `check-freshness` 只报告新鲜度，不把 stale 自动转成告警，避免在没有配置 stale 阈值时发明业务语义。
 - 命令发送成功不等于设备执行成功；只有匹配的 `RequestCompleted` 才会更新最近命令结果。
-- 真实硬件 E2E 需手动运行 `scripts/e2e_sensor_alert.py`；软件-only 验证不依赖 COM3、Edge、真实板或烧录。Driver `tone` 支持和跨租户生产验证仍需单独的真实链路证据。
+- 真实硬件 E2E 需手动运行 `scripts/e2e_sensor_alert.py`；当前真板脚本是 LED-only，不验证发声路径。软件-only 验证不依赖 COM3、Edge、真实板或烧录。Driver `tone` 支持和跨租户生产验证仍需单独的真实链路证据；在明确批准前不得用真板 E2E 发 `tone`/`buzzer`。
 - Application Protocol v1 的事件/RPC 只携带 `plugin_instance_id`，不携带 tenant。本插件按实例 ID 隔离状态，并对同一实例 ID 的第二个活动 effect stream 失败关闭；若部署允许不同租户复用同一实例 ID，必须使用 per-instance 隔离或保证实例 ID 跨租户唯一。

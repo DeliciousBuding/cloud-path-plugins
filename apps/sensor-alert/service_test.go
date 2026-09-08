@@ -424,3 +424,60 @@ func TestHandleEventsEndsAtEOF(t *testing.T) {
 type sliceReader struct{}
 
 func (*sliceReader) Recv(context.Context) (*application.ApplicationEvent, error) { return nil, io.EOF }
+func TestConfigUpdatePreservesActiveAlertUntilRecovery(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.CooldownS = 0
+	h := newHarness(t, cfg, []application.Binding{
+		{RequirementID: TemperatureRequirement, EntityID: "temperature-1"},
+		{RequirementID: LightRequirement, EntityID: "led-1"},
+	})
+	h.arm(t)
+	h.writer.reset()
+	h.observation(t, 1, TemperatureRequirement, "temperature-1", TemperatureCapability, "value", 35, "good")
+	if got := h.writer.alerts(t); len(got) != 1 || got[0].State != stateTriggered {
+		t.Fatalf("trigger alert = %+v", got)
+	}
+
+	h.writer.reset()
+	next := cfg
+	next.TemperatureMax = 40
+	raw, err := json.Marshal(next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := h.svc.ConfigureInstance(context.Background(), &application.ConfigureInstanceRequest{
+		PluginInstanceID: testInstance, Config: raw, ConfigRevision: 2,
+	})
+	if err != nil || !resp.Status.IsOK() {
+		t.Fatalf("config update: resp=%+v err=%v", resp, err)
+	}
+	st, err := h.svc.lookup(testInstance, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.mu.Lock()
+	if st.state != stateTriggered || len(st.active) != 1 {
+		t.Fatalf("config update lost active alert: state=%s active=%+v", st.state, st.active)
+	}
+	st.mu.Unlock()
+	if effects := h.writer.snapshot(); len(effects) != 0 {
+		t.Fatalf("config update emitted unexpected effects: %+v", effects)
+	}
+
+	h.now = h.now.Add(time.Second)
+	h.observation(t, 2, TemperatureRequirement, "temperature-1", TemperatureCapability, "value", 30, "good")
+	recovered := assertSingleAlertState(t, h.writer.alerts(t), stateRecovered, TemperatureRequirement)
+	if recovered.RecoveredAt == nil || recovered.Value == nil || *recovered.Value != 30 {
+		t.Fatalf("recovered after config update = %+v", recovered)
+	}
+	commands := h.writer.commands()
+	if len(commands) != 1 || commands[0].Action != actionLED {
+		t.Fatalf("recovery commands after config update = %+v", commands)
+	}
+	assertLedMask(t, commands[0], 0)
+	st.mu.Lock()
+	if len(st.active) != 0 {
+		t.Fatalf("active alerts not cleared after recovery: %+v", st.active)
+	}
+	st.mu.Unlock()
+}

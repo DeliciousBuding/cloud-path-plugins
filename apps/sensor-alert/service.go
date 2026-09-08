@@ -22,7 +22,7 @@ import (
 
 const (
 	pluginID      = "io.github.deliciousbuding.cloud-path-app-sensor-alert"
-	pluginVersion = "0.1.0"
+	pluginVersion = "0.1.1"
 
 	jobArm            = "arm"
 	jobDisarm         = "disarm"
@@ -161,19 +161,37 @@ func (s *Service) ConfigureInstance(_ context.Context, req *application.Configur
 		}, nil
 	}
 	if !st.configured || req.ConfigRevision != st.configRev {
+		previousActive := st.active
+		previousLastTriggered := st.lastTriggered
 		st.config = cfg
 		st.configRev = req.ConfigRevision
 		st.configured = true
 		st.sensors = map[string]*sensorState{}
 		st.active = map[string]activeAlert{}
 		st.lastTriggered = map[string]time.Time{}
+		// A configuration update must not erase an unresolved alert. Keep
+		// active conditions that remain enabled, then let the next observation
+		// either recover them or leave them active.
+		if st.armed {
+			for key, active := range previousActive {
+				if !cfg.sensorEnabled(active.Sensor) {
+					continue
+				}
+				st.active[key] = active
+				if triggeredAt, ok := previousLastTriggered[key]; ok {
+					st.lastTriggered[key] = triggeredAt
+				}
+			}
+		}
 		st.pending = map[string]commandResult{}
 		st.lastCommand = nil
 		st.jobResults = map[string]string{}
 		st.jobOrder = nil
 		if st.armed {
-			st.state = stateArmed
-			st.alert = AlertRecord{State: stateArmed, Severity: "info", Summary: "sensor alert armed"}
+			if len(st.active) == 0 {
+				st.state = stateArmed
+				st.alert = AlertRecord{State: stateArmed, Severity: "info", Summary: "sensor alert armed"}
+			}
 		} else {
 			st.state = stateDisarmed
 			st.alert = AlertRecord{State: stateDisarmed, Severity: "info", Summary: "sensor alert disarmed"}
