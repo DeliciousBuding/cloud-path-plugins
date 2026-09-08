@@ -367,7 +367,7 @@ func (s *Service) handleCapabilityEventLocked(ctx context.Context, st *instanceS
 		if role == VibrationRequirement && !st.config.VibrationEnabled {
 			return nil
 		}
-		return s.triggerLocked(ctx, st, role+"-event", role, eventValue(true), nil, triggerSummary(role, 1, nil, "event"))
+		return s.triggerLocked(ctx, st, role, role, eventValue(true), nil, triggerSummary(role, 1, nil, "event"))
 	}
 	if eventIsRecovery(role, ev.EventType) {
 		return s.recoverLocked(ctx, st, role, eventValue(false))
@@ -524,38 +524,34 @@ func (s *Service) handleCompletionLocked(st *instanceState, completed *applicati
 	if completed == nil {
 		return
 	}
+	state, terminal := terminalCommandState(completed.State)
+	if !terminal {
+		return
+	}
 	pending, ok := st.pending[completed.RequestID]
 	if !ok || pending.EntityID != completed.EntityID || pending.Action != completed.Action {
 		return
 	}
 	result := commandResult{
 		RequestID: completed.RequestID, EntityID: completed.EntityID, Action: completed.Action,
-		State: commandStateString(completed.State), ErrorCode: completed.ErrorCode,
+		State: state, ErrorCode: completed.ErrorCode,
 	}
 	delete(st.pending, completed.RequestID)
 	st.lastCommand = &result
 }
 
-func commandStateString(state application.CommandState) string {
+func terminalCommandState(state application.CommandState) (string, bool) {
 	switch state {
 	case application.CommandStateSucceeded:
-		return "succeeded"
+		return "succeeded", true
 	case application.CommandStateFailed:
-		return "failed"
+		return "failed", true
 	case application.CommandStateTimedOut:
-		return "timedout"
+		return "timedout", true
 	case application.CommandStateCancelled:
-		return "cancelled"
-	case application.CommandStateCreated:
-		return "created"
-	case application.CommandStateDispatched:
-		return "dispatched"
-	case application.CommandStateAccepted:
-		return "accepted"
-	case application.CommandStateRunning:
-		return "running"
+		return "cancelled", true
 	default:
-		return "unspecified"
+		return "", false
 	}
 }
 

@@ -107,7 +107,7 @@ armed/triggered/recovered --disarm--> disarmed
 2. 若绑定了 `alert-sound`、`silent=false` 且 `alert_tone != null`，发送 `RequestCommand{action:"tone", args_json: alert_tone}`；
 3. 若绑定了 `alert-light`，发送 `RequestCommand{action:"led", args_json:{"mask":alert_led_mask}}`。
 
-恢复或撤防时，LED 会收到 `{"mask":0}`。每条命令都有唯一 `idempotency_key` 和 30 秒 deadline。`RequestCompleted` 只有 `request_id`、`entity_id`、`action` 与待完成命令完全匹配时才会结算；未知或不匹配的完成事件会被忽略。命令失败/超时不会伪造恢复状态，也不会自动重试。
+恢复或撤防时，LED 会收到 `{"mask":0}`。每条命令都有唯一 `idempotency_key` 和 30 秒 deadline。`RequestCompleted` 只有在 `state` 为 `succeeded` / `failed` / `timedout` / `cancelled` 等终态，且 `request_id`、`entity_id`、`action` 与待完成命令完全匹配时才会结算；非终态、未知或不匹配的完成事件会被忽略。命令失败/超时不会伪造恢复状态，也不会自动重试。
 
 `tone` 需要目标 `buzzer@1` 实体声明并实现该 action。若目标 Driver 只提供 `buzzer` 档位命令，Core 会按正常命令失败路径返回结果；本 Application 不猜测或替换 Driver 的私有协议。
 
@@ -129,12 +129,34 @@ python scripts/validate_manifest.py plugin.yaml --dir .
 - 配置默认值、nullable 字段和封闭校验；
 - `arm` / `disarm` 幂等；
 - 温度触发、冷却、恢复和再次触发；
+- 光照 low/high、恢复和阈值边界；
 - `silent` 只记录/控灯；
-- hall / vibration CapabilityEvent；
-- `RequestCompleted` 结算；
+- hall / vibration CapabilityEvent，以及与同值 property observation 的去重；
+- `RequestCompleted` 终态结算、非终态/错配事件忽略、失败/超时映射；
+- 多活动条件全部清除后才进入 `recovered`；
 - 多实例状态与 effect 路由隔离；
 - `status` / `check-freshness` job；
 - manifest、requirements 和公开 SDK import 边界。
+
+## 真板 E2E（手动）
+
+`scripts/e2e_sensor_alert.py` 是可选的手动真板验收工具，不是自动测试：
+
+- 只走 CloudPath REST API；不直接打开 COM 口、不启动/停止 Edge、不烧录；
+- 默认是 dry-run，必须显式 `--execute`，且要求交互式 TTY 和确认短语；
+- 创建唯一的隔离实例，结束执行 `disarm` 并删除该实例；清理失败会以非零退出并写入 `cleanup_errors`，`--keep-instance` 仅用于排障；
+- 凭据来自环境变量或 `--credentials-file`，脚本不打印凭据；
+- 证据默认写入 gitignored 的 `.local/validation/`。
+
+示例（请替换占位值）：
+
+```bash
+export CLOUDPATH_BASE_URL=https://<cloudpath-host>
+export CLOUDPATH_E2E_DEVICE=<edge-id>/<device-id>
+python scripts/e2e_sensor_alert.py --execute --sensor contact --recovery-mode disarm --credentials-file <path-to-key-value-file>
+```
+
+`--sensor` 支持 `temperature`、`illuminance`、`contact`、`vibration`。脚本会等待 domain record 进入 `triggered`，再等待 `tone` 和 `led` 的 device ACK，并通过 `status` job 确认 `RequestCompleted` 已清空 pending；随后按 `--recovery-mode` 验证 `recover` 或 `disarm` 的 LED off。若同租户已有实例独占 buzzer/LED，创建或绑定会失败；脚本不会自动停用其他实例，需操作者先显式释放执行器。
 
 ## 限制
 
@@ -142,5 +164,5 @@ python scripts/validate_manifest.py plugin.yaml --dir .
 - 不持久化进程内状态；插件重启后需要重新 configure/bind/arm，Core 的 desired state 与记录仍由平台管理。
 - `check-freshness` 只报告新鲜度，不把 stale 自动转成告警，避免在没有配置 stale 阈值时发明业务语义。
 - 命令发送成功不等于设备执行成功；只有匹配的 `RequestCompleted` 才会更新最近命令结果。
-- 真实硬件 E2E、Driver `tone` 支持和跨租户生产验证不在本软件-only 任务的证明范围内。
+- 真实硬件 E2E 需手动运行 `scripts/e2e_sensor_alert.py`；软件-only 验证不依赖 COM3、Edge、真实板或烧录。Driver `tone` 支持和跨租户生产验证仍需单独的真实链路证据。
 - Application Protocol v1 的事件/RPC 只携带 `plugin_instance_id`，不携带 tenant。本插件按实例 ID 隔离状态，并对同一实例 ID 的第二个活动 effect stream 失败关闭；若部署允许不同租户复用同一实例 ID，必须使用 per-instance 隔离或保证实例 ID 跨租户唯一。
