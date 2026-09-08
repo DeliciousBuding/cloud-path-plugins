@@ -17,7 +17,7 @@ import (
 // Manifest identity. These values must mirror plugin.yaml.
 const (
 	pluginIDValue    = "io.github.deliciousbuding.cloud-path-app-scheduled-compartment"
-	pluginVersion    = "0.2.4"
+	pluginVersion    = "0.2.5"
 	jobWindowCheck   = "window-check"
 	jobStartReminder = "start-reminder"
 	jobConfirmWindow = "confirm-window"
@@ -34,8 +34,12 @@ const (
 	windowCompleted     = "completed"
 	windowMissed        = "missed"
 	windowCompletedLate = "completed_late"
-	sourceManual        = "manual"
-	sourceSchedule      = "schedule"
+
+	// reminderSuppressed 是静音策略的诚实终态：没有发出蜂鸣命令，
+	// 因此也永远不会有该命令的回执（区别于 pending/failed）。
+	reminderSuppressed = "suppressed"
+	sourceManual       = "manual"
+	sourceSchedule     = "schedule"
 )
 
 // keyPressEvent is the event type delivered by the key@1 capability. A key
@@ -562,7 +566,7 @@ func (s *Service) instance(id string) *instanceState {
 
 func (s *Service) windowStartEffects(st *instanceState, w *windowTrack) []application.ApplicationEffectUnion {
 	effects := []application.ApplicationEffectUnion{windowRecord(w)}
-	if w.ReminderEntity != "" {
+	if w.ReminderEntity != "" && w.ReminderState != reminderSuppressed {
 		policy := defaultReminder
 		if st != nil && st.config != nil {
 			policy = st.config.ResolvedReminder()
@@ -581,6 +585,19 @@ func (s *Service) windowStartEffects(st *instanceState, w *windowTrack) []applic
 		PayloadJSON: mustJSON(map[string]any{"window_id": w.ID}),
 	})
 	return effects
+}
+
+// reminderSilenced reports whether the resolved policy is fully silent. The
+// reference board firmware rejects freq=0 with badarg (2026-09-08 real-device
+// probe), so a silent policy must not emit a doomed buzzer command; the window
+// records reminder_state=suppressed and the optional display policy stays the
+// visual channel. Explicit audible steps keep the original request/receipt path.
+func reminderSilenced(st *instanceState) bool {
+	policy := defaultReminder
+	if st != nil && st.config != nil {
+		policy = st.config.ResolvedReminder()
+	}
+	return policy.Freq == 0 && policy.Duration == 0
 }
 
 // validateBindings enforces the declared requirement cardinalities and rejects

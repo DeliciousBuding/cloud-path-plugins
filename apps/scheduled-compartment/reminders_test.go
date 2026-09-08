@@ -51,7 +51,9 @@ type practicalApp struct {
 }
 
 func practicalConfig(n int) Config {
-	cfg := Config{Timezone: "UTC", Schedule: []WindowSpec{{ID: "morning", Compartment: "c1", Start: "08:00", End: "08:30"}}}
+	// Audible by default in tests: the silent path is asserted separately
+	// (TestExplicitSilentReminderAndWindowStatus).
+	cfg := Config{Timezone: "UTC", Reminder: &Reminder{Freq: 1, Duration: 1}, Schedule: []WindowSpec{{ID: "morning", Compartment: "c1", Start: "08:00", End: "08:30"}}}
 	for i := 1; i <= n; i++ {
 		cfg.Compartments = append(cfg.Compartments, Compartment{ID: fmt.Sprintf("c%d", i)})
 	}
@@ -233,7 +235,7 @@ func TestNoHotRemappingOfOpenWindows(t *testing.T) {
 	}
 }
 
-func TestManualStartIsRealQuietPendingAndIdempotent(t *testing.T) {
+func TestManualStartIsRealPendingAndIdempotent(t *testing.T) {
 	p := newPracticalApp(t, 1)
 	result := p.start(t, "trial-1", "c1", 2)
 	for key, want := range map[string]any{"window_id": "trial-1", "state": windowOpened, "source": sourceManual, "reminder_state": "pending", "reminder_request_id": "reminder-trial-1", "effects_status": "submitted"} {
@@ -250,8 +252,8 @@ func TestManualStartIsRealQuietPendingAndIdempotent(t *testing.T) {
 		t.Fatalf("wrong command: %+v", command)
 	}
 	var policy Reminder
-	if err := json.Unmarshal([]byte(command.ArgsJSON), &policy); err != nil || policy != (Reminder{Freq: 0, Duration: 0}) {
-		t.Fatalf("default must be silent: %+v %v", policy, err)
+	if err := json.Unmarshal([]byte(command.ArgsJSON), &policy); err != nil || policy != (Reminder{Freq: 1, Duration: 1}) {
+		t.Fatalf("configured audible policy must be emitted as-is: %+v %v", policy, err)
 	}
 	task, ok := effects[2].Union.(*application.ScheduleTask)
 	if !ok || task.ScheduleID != windowTaskID("trial-1") || task.Cron != windowCheckCron {
@@ -659,12 +661,16 @@ func TestExplicitSilentReminderAndWindowStatus(t *testing.T) {
 	if !resp.Status.IsOK() {
 		t.Fatal(resp.Status)
 	}
-	p.start(t, "silent", "c1", 1)
+	result := p.start(t, "silent", "c1", 1)
 	effects := p.sink.take()
-	cmd := effects[1].Union.(*application.RequestCommand)
-	var policy Reminder
-	if err := json.Unmarshal([]byte(cmd.ArgsJSON), &policy); err != nil || policy != (Reminder{Freq: 0, Duration: 0}) {
-		t.Fatalf("explicit silence changed: %s (%v)", cmd.ArgsJSON, err)
+	// Silent policy: window record + durable check task and NO buzzer command.
+	// The reference firmware rejects freq=0 with badarg; emitting a doomed
+	// command is not honesty, it is a manufactured failed receipt.
+	if countRequestCommand(effects) != 0 {
+		t.Fatal("silent policy still emitted a buzzer command")
+	}
+	if result["reminder_state"] != "suppressed" || result["reminder_request_id"] != "" {
+		t.Fatalf("silent result misreported: %v", result)
 	}
 	http, err := p.svc.HandleRequest(context.Background(), &application.PluginHTTPRequest{Method: "GET", Context: application.RequestContext{InstanceID: testInstance}})
 	if err != nil || http.StatusCode != 200 {
@@ -676,8 +682,24 @@ func TestExplicitSilentReminderAndWindowStatus(t *testing.T) {
 	}
 	windows := body["window_details"].([]any)
 	row := windows[0].(map[string]any)
-	if body["runtime_state_persistent"] != false || row["id"] != "silent" || row["reminder_state"] != "pending" || row["reminder_request_id"] != "reminder-silent" {
+	if body["runtime_state_persistent"] != false || row["id"] != "silent" || row["reminder_state"] != "suppressed" || row["reminder_request_id"] != "" {
 		t.Fatalf("status hides real state/identity: %s", http.Body)
+	}
+}
+
+// Omitting the reminder block resolves to the silent default and must behave
+// exactly like the explicit silent policy: no command, suppressed state.
+func TestOmittedReminderDefaultsToSuppressed(t *testing.T) {
+	p := newPracticalApp(t, 1)
+	cfg := practicalConfig(1)
+	cfg.Reminder = nil
+	resp, _ := p.svc.ConfigureInstance(context.Background(), &application.ConfigureInstanceRequest{PluginInstanceID: testInstance, Config: []byte(mustJSON(cfg)), ConfigRevision: 2})
+	if !resp.Status.IsOK() {
+		t.Fatal(resp.Status)
+	}
+	result := p.start(t, "default-silent", "c1", 1)
+	if countRequestCommand(p.sink.take()) != 0 || result["reminder_state"] != "suppressed" || result["reminder_request_id"] != "" {
+		t.Fatalf("omitted reminder should default to suppressed: %v", result)
 	}
 }
 

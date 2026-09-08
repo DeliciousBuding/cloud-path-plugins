@@ -235,7 +235,11 @@ func (s *Service) startWindow(st *instanceState, w *windowTrack, now time.Time) 
 	}
 	w.State = windowOpened
 	w.OpenedAt = now
-	w.ReminderState = "pending"
+	if reminderSilenced(st) {
+		w.ReminderState = reminderSuppressed
+	} else {
+		w.ReminderState = "pending"
+	}
 	return s.windowStartEffects(st, w)
 }
 
@@ -281,7 +285,7 @@ func scheduleOccurrenceID(id string, start time.Time) string {
 }
 
 func reminderRequestID(w *windowTrack) string {
-	if w.ReminderState == "not_requested" || w.ReminderEntity == "" {
+	if w.ReminderState == "not_requested" || w.ReminderState == reminderSuppressed || w.ReminderEntity == "" {
 		return ""
 	}
 	return reminderRequestPrefix + w.ID
@@ -297,6 +301,9 @@ func windowPresentation(w *windowTrack) (string, string) {
 	}
 	switch w.State {
 	case windowOpened:
+		if w.ReminderState == reminderSuppressed {
+			return name + "：待确认取药", "提醒窗口已开启（静音策略：未发送蜂鸣命令），等待使用者确认取药；可视提示结果另行记录。"
+		}
 		return name + "：待确认取药", "提醒窗口已开启，等待使用者确认取药；提示命令的结果另行记录。"
 	case windowCompleted:
 		return name + "：已人工确认取药", "使用者已在窗口内确认取药，不代表药物已经吞服。"

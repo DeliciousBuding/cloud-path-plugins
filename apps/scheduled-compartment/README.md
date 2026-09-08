@@ -14,7 +14,7 @@
 
 | Requirement | Capability | 数量 / 行为 |
 |---|---|---|
-| `reminder-output` | `cloudpath.dev/capability/buzzer@1` | 必须一个；静音时仍走真实命令与回执链路 |
+| `reminder-output` | `cloudpath.dev/capability/buzzer@1` | 必须一个；静音策略下不发出蜂鸣命令（`reminder_state=suppressed`），可听策略走真实命令与回执链路 |
 | `compartments` | `cloudpath.dev/capability/key@1` | 静态最少 1；实际绑定数必须等于配置格数 |
 | `local-display` | `cloudpath.dev/capability/display-text@1` | 可选一个；配置显式 `display` 策略后提供静音视觉提示，无配置/绑定不输出 |
 
@@ -39,9 +39,9 @@ STC-B 同板验收时，给取药应用预留 **key1**；**key2、key3 不绑定
 - `timezone` 必须是有效 IANA 时区；由 Core 时钟生成每日窗口。
 - `compartments` 至少一项，`id` 为 1–128 个 UTF-8 字节、唯一、无首尾空白。数组顺序就是按键映射顺序。
 - `schedule` 至少一项，`id` 为 1–128 个 UTF-8 字节且唯一，`compartment` 必须存在；`start/end` 必须严格为 `HH:MM`，结束晚于开始，不支持跨午夜。
-- `reminder.freq/duration` 均为 0–9 整数。**省略整个 reminder 也默认 0/0 静音**；显式 0 保留，不会被替换成非零。非零提示音必须由操作人主动配置。
+- `reminder.freq/duration` 均为 0–9 整数。**省略整个 reminder 也默认 0/0 静音**；显式 0 保留，不会被替换成非零。非零提示音必须由操作人主动配置。参考板固件实测拒绝 freq=0/9 与 duration=9（badarg，2026-09-08 真机探测）；应用对可听档位不做设备侧假设，越界值会留下诚实的失败回执。
 
-静音只关闭声音，不绕过提醒业务：仍会发出 `RequestCommand(buzzer)`，初态是 `pending`，需要 Core 回送最终 `RequestCompleted` 才能知道命令结果。
+静音策略（freq 与 duration 均为 0，含省略默认）**不发出任何蜂鸣命令**：窗口记录 `reminder_state=suppressed`、`reminder_request_id` 为空。这不是失败态——参考固件拒绝 freq=0，发出命令只会制造注定失败的记录。提醒业务（开窗/确认/超时）不受影响；静音时的本地可见提示用下面的 `display` 策略。可听策略初态是 `pending`，需要 Core 回送最终 `RequestCompleted` 才能知道命令结果。
 
 ### 可选：静音视觉提示
 
@@ -213,7 +213,7 @@ Core 每分钟运行 `window-check`，所以无确认的窗口通常在截止后
 
 ## 4. 现场验收清单（默认全程静音）
 
-1. 保存一格配置和显式 key1 + buzzer 绑定，`reminder` 为 0/0；要验收静音视觉提示，另外配置上面的 `display` 示例并绑定显示实体。实例配置与绑定都应成功。三格只绑一个键、绑定重复键或未知实体必须失败；不得自动换键。
+1. 保存一格配置和显式 key1 + buzzer 绑定，`reminder` 为 0/0；开窗后应看到 `reminder_state=suppressed` 且**没有**蜂鸣命令产生（命令历史无新增 buzzer 行）。要验收静音视觉提示，另外配置上面的 `display` 示例并绑定显示实体。实例配置与绑定都应成功。三格只绑一个键、绑定重复键或未知实体必须失败；不得自动换键。
 2. 调用 `start-reminder`，检查窗口的格名/“待确认取药”标题和 `source=manual`；两个输出请求分别是 pending 或各自真实终态。启用示例策略时，板端应显示状态码 1；必须核对显示 ACK，不把“请求已发出”当作显示成功。同参数重试不得重复提示或推迟截止。
 3. 截止前按 key1：`completed`、`confirmation_source=key`、标题“已人工确认取药”。若没有其他待办，显示在前一条请求终结后切换到示例的 clock，并独立等待回执。key2/key3 应只供其他应用使用，不改变本窗口。
 4. 新开一分钟窗口，不确认，等待下一次检查：`missed` / “已超时”，示例显示状态码 2；随后按 key1：`completed_late` / “迟到确认取药”。有其他待确认窗口时回到其待办提示，否则空闲。在检查前、恰好截止时确认也必须是迟到。

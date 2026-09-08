@@ -25,6 +25,8 @@ func newDisplayApp(t *testing.T, n int) *practicalApp {
 	t.Helper()
 	p := newPracticalApp(t, n)
 	cfg := practicalConfig(n)
+	// Display tests exercise the silent visual channel: explicit silence.
+	cfg.Reminder = &Reminder{}
 	cfg.Display = testDisplayPolicy()
 	cfg.Compartments[0].Name = "早餐药格"
 	configureDisplayTest(t, p, cfg, append(practicalBindings(n), application.Binding{RequirementID: "local-display", EntityID: testDisplayEntity}))
@@ -172,12 +174,11 @@ func TestSilentReminderHasPendingVisualEvidence(t *testing.T) {
 	if !strings.HasPrefix(request.IdempotencyKey, displayRequestPrefix) || request.IdempotencyKey == "reminder-visible" {
 		t.Fatal("display and reminder requests share an ID")
 	}
+	// v0.2.5: a silent policy emits NO buzzer command at all (suppressed);
+	// the display request above is the only reminder channel.
 	for _, effect := range effects {
 		if cmd, ok := effect.Union.(*application.RequestCommand); ok && cmd.Action == buzzerAction {
-			var policy Reminder
-			if err := json.Unmarshal([]byte(cmd.ArgsJSON), &policy); err != nil || policy != (Reminder{}) {
-				t.Fatalf("visual mode made buzzer audible: %s", cmd.ArgsJSON)
-			}
+			t.Fatalf("silent visual mode emitted a buzzer command: %s", cmd.ArgsJSON)
 		}
 	}
 	record := displayRecordData(t, effects)
@@ -205,7 +206,7 @@ func TestSilentReminderHasPendingVisualEvidence(t *testing.T) {
 		t.Fatalf("final display receipt missing: %+v", done)
 	}
 	w := p.window(t, "visible")
-	if w.State != windowOpened || w.ReminderState != "pending" {
+	if w.State != windowOpened || w.ReminderState != reminderSuppressed {
 		t.Fatalf("display ACK confirmed collection or buzzer: %+v", w)
 	}
 }
@@ -277,7 +278,7 @@ func TestDisplayTerminalOutcomesStayHonestAndDoNotHeartbeatRetry(t *testing.T) {
 				t.Fatal("duplicate/conflicting terminal ACK rewrote the outcome")
 			}
 			w := p.window(t, "outcome")
-			if w.State != windowOpened || w.ReminderState != "pending" {
+			if w.State != windowOpened || w.ReminderState != reminderSuppressed {
 				t.Fatal("display outcome changed collection or buzzer result")
 			}
 		})
@@ -453,12 +454,17 @@ func TestWindowLabelsCaptureNameAndIgnoreCommandOutcomes(t *testing.T) {
 	if windowStateOf(p.sink.take(), "named") != "" {
 		t.Fatal("display receipt rewrote collection record")
 	}
+	// Silent policy never emitted reminder-named, so this receipt is unrelated
+	// and must be ignored outright (audible receipt semantics are covered in
+	// reminders_test.go).
 	p.event(t, &application.RequestCompleted{RequestID: "reminder-named", EntityID: buzzerEntityID, Action: buzzerAction, State: application.CommandStateSucceeded})
 	effects = p.sink.take()
-	afterTitle, _ := windowFieldOf(effects, "named", "title")
-	afterSummary, _ := windowFieldOf(effects, "named", "summary")
-	if afterTitle != title || afterSummary != summary || p.window(t, "named").State != windowOpened {
-		t.Fatal("buzzer ACK claimed collection in the presentation")
+	if len(effects) != 0 {
+		t.Fatalf("unrelated buzzer receipt emitted effects: %+v", effects)
+	}
+	var afterTitle, afterSummary any
+	if w := p.window(t, "named"); w.State != windowOpened || w.ReminderState != reminderSuppressed {
+		t.Fatalf("buzzer ACK claimed collection under silent policy: %+v", w)
 	}
 	cfg := practicalConfig(1)
 	cfg.Display = testDisplayPolicy()
@@ -493,10 +499,10 @@ func TestMissedAndLateWindowLabelsDoNotChangeMachineIdentity(t *testing.T) {
 	result := confirmDisplayWindow(t, p, "labels")
 	effects = p.sink.take()
 	title, _ = windowFieldOf(effects, "labels", "title")
-	if title != "早餐药格：迟到确认取药" || windowStateOf(effects, "labels") != windowCompletedLate || result["window_id"] != "labels" || result["reminder_request_id"] != "reminder-labels" {
+	if title != "早餐药格：迟到确认取药" || windowStateOf(effects, "labels") != windowCompletedLate || result["window_id"] != "labels" || result["reminder_request_id"] != "" || result["reminder_state"] != "suppressed" {
 		t.Fatalf("late label changed machine identity: %v / %v", title, result)
 	}
-	if p.window(t, "labels").ReminderState != "pending" {
+	if p.window(t, "labels").ReminderState != reminderSuppressed {
 		t.Fatal("confirmation fabricated a reminder ACK")
 	}
 }
@@ -610,7 +616,7 @@ func TestRemovingDisplayOptInCannotSendAPreviouslyQueuedIdle(t *testing.T) {
 
 func TestPartialDisplaySubmissionNeverReturnsDisplayedSuccess(t *testing.T) {
 	p := newDisplayApp(t, 1)
-	p.sink.failAt = 5 // window, quiet buzzer, task, display pending record, failed display send
+	p.sink.failAt = 4 // window record, check task, display pending record, failed display send
 	resp, err := p.job(jobStartReminder, mustJSON(startReminderArgs{CompartmentID: "c1", Minutes: 1, WindowID: "partial-display"}), "partial-display")
 	if err == nil || resp != nil {
 		t.Fatalf("partial display submission reported success: %+v %v", resp, err)

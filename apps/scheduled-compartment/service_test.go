@@ -35,7 +35,8 @@ var validConfigJSON = `{
   ],
   "schedule": [
     {"id":"w-morning","compartment":"c1","start":"08:00","end":"08:30"}
-  ]
+  ],
+  "reminder": {"freq": 1, "duration": 1}
 }`
 
 var validBindings = []application.Binding{
@@ -266,7 +267,7 @@ func TestDescriptorRequirements(t *testing.T) {
 	if desc.ApplicationID != "io.github.deliciousbuding.cloud-path-app-scheduled-compartment" {
 		t.Fatalf("application id = %q", desc.ApplicationID)
 	}
-	if desc.Version != "0.2.4" {
+	if desc.Version != "0.2.5" {
 		t.Fatalf("version = %q", desc.Version)
 	}
 	if desc.DeclarativeOnly {
@@ -409,8 +410,8 @@ func TestWindowReminderEffect(t *testing.T) {
 	if err := json.Unmarshal([]byte(gotRequest.ArgsJSON), &args); err != nil {
 		t.Fatalf("buzzer args %q: %v", gotRequest.ArgsJSON, err)
 	}
-	if args.Freq != defaultReminder.Freq || args.Duration != defaultReminder.Duration {
-		t.Fatalf("buzzer args = %+v, want default reminder policy %+v", args, defaultReminder)
+	if args.Freq != 1 || args.Duration != 1 {
+		t.Fatalf("buzzer args = %+v, want configured audible policy {Freq:1 Duration:1}", args)
 	}
 	if gotRequest.IdempotencyKey != reminderRequestPrefix+testScheduledWindow {
 		t.Fatalf("idempotency = %q, want reminder-win-1", gotRequest.IdempotencyKey)

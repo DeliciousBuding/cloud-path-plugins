@@ -40,8 +40,11 @@ type Reminder struct {
 }
 
 // defaultReminder is the fallback when the config omits the reminder policy:
-// silent output (no audible reminder). An explicit
-// reminder block is honoured as-is (including a deliberately silent one).
+// silent output. A silent policy (freq==0 && duration==0, explicit or default)
+// emits NO buzzer command at all — the window records reminder_state=
+// "suppressed". The reference firmware rejects freq=0 with badarg, so sending
+// it would only manufacture an honest-but-noisy failed receipt on every
+// window. An explicit audible block is honoured as-is.
 var defaultReminder = Reminder{Freq: 0, Duration: 0}
 
 // ResolvedReminder returns the effective reminder policy with defaults applied.
