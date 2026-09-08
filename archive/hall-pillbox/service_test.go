@@ -387,7 +387,7 @@ func TestBindingCardinality(t *testing.T) {
 	}
 }
 
-func TestStartWindowEffectsAndHallConfirmation(t *testing.T) {
+func TestStartWindowEffectsAndHallOpenConfirmation(t *testing.T) {
 	f := newFixture(t, true)
 	result := f.mustJob(t, jobStartWindow, `{"window_id":"trial-1","minutes":10}`, "start-1")
 	if result["state"] != windowOpened || result["reminder_state"] != reminderPending {
@@ -418,7 +418,7 @@ func TestStartWindowEffectsAndHallConfirmation(t *testing.T) {
 	f.event(t, &application.CapabilityEvent{
 		RequirementID: openingRequirement,
 		EntityID:      hallEntity,
-		EventType:     hallCloseEvent,
+		EventType:     hallAwayEvent,
 		OccurredAt:    f.now().Format(time.RFC3339Nano),
 	})
 	confirmEffects := f.sink.take()
@@ -438,6 +438,25 @@ func TestStartWindowEffectsAndHallConfirmation(t *testing.T) {
 	}
 	if f.window(t, "trial-1").State != windowCompleted {
 		t.Fatal("window did not complete")
+	}
+}
+
+func TestHallCloseDoesNotConfirm(t *testing.T) {
+	f := newFixture(t, false)
+	f.mustJob(t, jobStartWindow, `{"window_id":"close-1","minutes":10}`, "close-start")
+	f.sink.take()
+	f.advance(time.Minute)
+	f.event(t, &application.CapabilityEvent{
+		RequirementID: openingRequirement,
+		EntityID:      hallEntity,
+		EventType:     hallCloseEvent,
+		OccurredAt:    f.now().Format(time.RFC3339Nano),
+	})
+	if effects := f.sink.take(); len(effects) != 0 {
+		t.Fatalf("hall close emitted confirmation effects: %+v", effects)
+	}
+	if f.window(t, "close-1").State != windowOpened {
+		t.Fatal("hall close must not confirm an opened window")
 	}
 }
 

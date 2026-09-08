@@ -10,7 +10,7 @@
 
 | Requirement | Capability | 数量 | 行为 |
 |---|---|---:|---|
-| `opening` | `cloudpath.dev/capability/hall@1` | one | 霍尔开盖/磁场边沿输入；Driver 当前实际事件为 `/close`、`/away`，应用同时兼容 `/open` |
+| `opening` | `cloudpath.dev/capability/hall@1` | one | 霍尔开盖/磁场边沿输入；Driver 的 `/away` 表示磁场离开（开盖），`/close` 表示磁场靠近（关盖）不触发确认；同时兼容通用 `/open` |
 | `confirm` | `cloudpath.dev/capability/key@1` | zero-or-one | K1 兜底确认；未绑定时霍尔和管理台确认仍可用 |
 | `reminder-output` | `cloudpath.dev/capability/buzzer@1` | one | 窗口开启时发出提醒，确认时发出停止命令 |
 | `local-display` | `cloudpath.dev/capability/display-text@1` | zero-or-one | 可选视觉提示；确认后恢复 `idle_args`（通常是时钟） |
@@ -88,7 +88,7 @@ Core 的每日窗口调度会读取配置中的 `schedule` 并发送 `ScheduleTi
 
 ## 5. 事件和副作用
 
-- `hall@1/close`、`hall@1/away`、兼容的 `hall@1/open`：绑定到 `opening` 的实体事件，视为霍尔边沿确认，`confirmation_source=hall`。
+- `hall@1/away`（磁场离开，开盖）和兼容的 `hall@1/open`：绑定到 `opening` 的实体事件，视为霍尔开盖确认，`confirmation_source=hall`。`hall@1/close` 是磁场靠近/关盖，明确忽略，避免刚关盖或噪声边沿误确认。
 - `key@1/press`：仅当 `confirm` 已绑定且实体匹配时作为兜底确认，`confirmation_source=key`。
 - 管理台 `confirm-window`：`confirmation_source=dashboard`。
 - 窗口开启：先写 `window` domain record，再发 buzzer 和可选 display 命令。

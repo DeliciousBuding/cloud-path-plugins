@@ -374,7 +374,8 @@ func (s *Service) onCapabilityEvent(instanceID string, ev *application.Capabilit
 		return nil
 	}
 	switch ev.EventType {
-	case hallCloseEvent, hallAwayEvent, hallOpenEvent:
+	// hall close = magnet present (lid closed); only away/open confirm opening.
+	case hallAwayEvent, hallOpenEvent:
 		if ev.RequirementID != openingRequirement {
 			return nil
 		}
