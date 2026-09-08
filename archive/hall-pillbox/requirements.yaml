@@ -1,0 +1,14 @@
+# Human-readable mirror of plugin.yaml. The machine manifest remains plugin.yaml.
+requirements:
+  - id: opening
+    capability: cloudpath.dev/capability/hall@1
+    cardinality: one
+  - id: confirm
+    capability: cloudpath.dev/capability/key@1
+    cardinality: zero-or-one
+  - id: reminder-output
+    capability: cloudpath.dev/capability/buzzer@1
+    cardinality: one
+  - id: local-display
+    capability: cloudpath.dev/capability/display-text@1
+    cardinality: zero-or-one
