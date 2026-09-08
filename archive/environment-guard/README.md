@@ -23,7 +23,7 @@
 | `temperature` | `cloudpath.dev/capability/temperature@1` | one |
 | `illuminance` | `cloudpath.dev/capability/illuminance@1` | one |
 
-本版**两项都必需**，包括光照阈值关闭时。每项必须恰好绑定一个真实实体；一个复合实体可同时支持两项能力。Core Binder 负责能力匹配和租户授权，应用再次核对 requirement/entity/capability/property。未知、重复、空或缺少的绑定被拒绝。换绑会丢弃该角色旧读数，等待新实体观测；不会继承原实体的正常状态。
+本版**两项都必需**，包括光照阈值关闭时。每项必须恰好绑定一个真实实体；同一设备上的两个实体可以分别承担两项输入。当前 Core Binder 不允许同一实体重复占用两个角色；应用自身不依赖设备数量。Core Binder 负责能力匹配和租户授权，应用再次核对 requirement/entity/capability/property。未知、重复、空或缺少的绑定被拒绝。换绑会丢弃该角色旧读数，等待新实体观测；不会继承原实体的正常状态。
 
 ## 配置
 
