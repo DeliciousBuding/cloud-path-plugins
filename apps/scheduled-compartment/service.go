@@ -17,7 +17,7 @@ import (
 // Manifest identity. These values must mirror plugin.yaml.
 const (
 	pluginIDValue    = "io.github.deliciousbuding.cloud-path-app-scheduled-compartment"
-	pluginVersion    = "0.2.3"
+	pluginVersion    = "0.2.4"
 	jobWindowCheck   = "window-check"
 	jobStartReminder = "start-reminder"
 	jobConfirmWindow = "confirm-window"
@@ -638,9 +638,10 @@ func validateBindings(bindings []application.Binding, cfg *Config) []application
 			Message:       fmt.Sprintf("compartments requires at least 1 binding, got %d", counts["compartments"]),
 		})
 	}
-	if cfg == nil {
-		issues = append(issues, application.BindingIssue{RequirementID: "compartments", Severity: "error", Message: "configure the instance before validating bindings"})
-	} else if counts["compartments"] != len(cfg.Compartments) {
+	// Core may validate before configuration. Structural requirements are checked
+	// now; ConfigureInstance enforces the exact configured count against these
+	// retained bindings before accepting any application settings.
+	if cfg != nil && counts["compartments"] != len(cfg.Compartments) {
 		issues = append(issues, application.BindingIssue{RequirementID: "compartments", Severity: "error", Message: fmt.Sprintf("compartment bindings (%d) must exactly match configured compartments (%d), in config order", counts["compartments"], len(cfg.Compartments))})
 	}
 	if counts["local-display"] > 1 {

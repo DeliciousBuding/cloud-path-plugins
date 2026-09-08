@@ -165,8 +165,11 @@ func TestSingleCompartmentAndExactBindingCounts(t *testing.T) {
 	}
 	bare := New()
 	resp, err := bare.ValidateBinding(context.Background(), &application.ValidateBindingRequest{PluginInstanceID: testInstance, Bindings: practicalBindings(1)})
-	if err != nil || resp.Valid {
-		t.Fatalf("unconfigured validation accepted: %+v %v", resp, err)
+	if err != nil || !resp.Valid {
+		t.Fatalf("structural pre-config validation rejected: %+v %v", resp, err)
+	}
+	if bare.instance(testInstance).config != nil {
+		t.Fatal("pre-config validation must not fabricate application settings")
 	}
 }
 
