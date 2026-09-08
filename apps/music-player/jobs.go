@@ -220,15 +220,12 @@ func (s *Service) RunJob(ctx context.Context, req *application.RunJobRequest) (*
 		st.session = session
 		body = mustJSON(sessionData(st))
 		effects = append(effects, musicSessionRecord(st))
-		for _, key := range session.CommandOrder {
-			command := session.Commands[key]
-			effects = append(effects, &application.RequestCommand{
-				EntityID:       sound,
-				Action:         toneAction,
-				ArgsJSON:       mustJSON(command.Note),
-				IdempotencyKey: command.Key,
-			})
+		if len(session.CommandOrder) == 0 {
+			s.mu.Unlock()
+			return nil, status.Errorf(status.CodeFailedPrecondition, "song has no notes")
 		}
+		session.NextIndex = 1
+		effects = append(effects, toneCommand(sound, session.Commands[session.CommandOrder[0]]))
 	}
 	s.mu.Unlock()
 

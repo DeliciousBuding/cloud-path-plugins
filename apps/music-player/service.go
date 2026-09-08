@@ -71,6 +71,7 @@ type musicSession struct {
 	CompletedNotes int
 	Commands       map[string]*sessionCommand
 	CommandOrder   []string
+	NextIndex      int
 	ErrorCode      string
 	ResultJSON     string
 	FailedNote     *NoteResult

@@ -77,8 +77,10 @@ Version **0.1.0**；需要 Core `>=0.2.15 <0.3.0` 和公开 Go SDK v0.2.15。
 }
 ```
 
-命令按顺序提交给 Core；Driver 负责串行执行和硬件节奏。应用**不会**
-在 `RunJob` 或事件处理里 sleep 阻塞，也不直接操作硬件。
+应用每次只提交**一个**在途音符，收到成功 `RequestCompleted` 后才提交下一个；
+因此不会把整首歌一次性塞进 Driver 队列。任一音符失败/超时/取消后，会话进入
+`failed`，后续音符不再提交。应用**不会**在 `RunJob` 或事件处理里 sleep 阻塞，
+也不直接操作硬件。
 
 ## `music_session` domain record
 

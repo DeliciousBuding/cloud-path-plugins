@@ -261,7 +261,7 @@ func TestDescriptorAndManifestIdentity(t *testing.T) {
 	}
 }
 
-func TestPlaySongEmitsOrderedToneCommandsAndQueuedRecord(t *testing.T) {
+func TestPlaySongQueuesFirstToneAndRecord(t *testing.T) {
 	h := newHarness(t, testBindings)
 	response, err := h.run(jobPlaySong, `{"song":"little-star","repeat":1}`, "song-1")
 	if err != nil || !response.Status.IsOK() {
@@ -269,34 +269,28 @@ func TestPlaySongEmitsOrderedToneCommandsAndQueuedRecord(t *testing.T) {
 	}
 
 	notes := songCatalog[songLittleStar]
-	effects := h.writer.waitFor(t, len(notes)+1)
+	effects := h.writer.waitFor(t, 2)
 	commands := requestCommands(effects)
-	if len(commands) != len(notes) {
-		t.Fatalf("tone commands = %d, want %d", len(commands), len(notes))
+	if len(commands) != 1 {
+		t.Fatalf("tone commands = %d, want exactly one in-flight command", len(commands))
 	}
-	for index, command := range commands {
-		if command.Action != toneAction || command.EntityID != testBindings[0].EntityID || command.IdempotencyKey == "" {
-			t.Fatalf("command %d = %+v", index, command)
-		}
-		var got Note
-		if err := json.Unmarshal([]byte(command.ArgsJSON), &got); err != nil {
-			t.Fatalf("decode command args: %v", err)
-		}
-		if got != notes[index] {
-			t.Fatalf("command %d note = %+v, want %+v", index, got, notes[index])
-		}
+	command := commands[0]
+	if command.Action != toneAction || command.EntityID != testBindings[0].EntityID || command.IdempotencyKey == "" {
+		t.Fatalf("command = %+v", command)
 	}
-	for index := 1; index < len(commands); index++ {
-		if commands[index].IdempotencyKey == commands[index-1].IdempotencyKey {
-			t.Fatal("note idempotency keys must be unique")
-		}
+	var got Note
+	if err := json.Unmarshal([]byte(command.ArgsJSON), &got); err != nil {
+		t.Fatalf("decode command args: %v", err)
+	}
+	if got != notes[0] {
+		t.Fatalf("first command note = %+v, want %+v", got, notes[0])
 	}
 
 	record := lastSessionRecord(t, effects)
 	if record["song"] != songLittleStar || record["status"] != statusQueued || record["repeat"] != float64(1) || record["last_note"] != nil {
 		t.Fatalf("queued record = %+v", record)
 	}
-	if record["queued_at"] == "" || record["request_id"] == "" || record["sound_bound"] != true || record["degraded"] != true {
+	if record["total_notes"] != float64(len(notes)) || record["queued_at"] == "" || record["request_id"] == "" || record["sound_bound"] != true || record["degraded"] != true {
 		t.Fatalf("record missing required state: %+v", record)
 	}
 }
@@ -366,13 +360,22 @@ func TestRequestCompletedAdvancesAndCompletesSession(t *testing.T) {
 		t.Fatalf("RunJob: %+v, %v", response, err)
 	}
 	notes := songCatalog[songOdeToJoy]
-	effects := h.writer.waitFor(t, len(notes)+1)
+	effects := h.writer.waitFor(t, 2)
 	commands := requestCommands(effects)
-	if len(commands) != len(notes) {
-		t.Fatalf("commands = %d, want %d", len(commands), len(notes))
+	if len(commands) != 1 {
+		t.Fatalf("initial commands = %d, want 1", len(commands))
 	}
 
-	for index, command := range commands {
+	for index := range notes {
+		command := commands[len(commands)-1]
+		var got Note
+		if err := json.Unmarshal([]byte(command.ArgsJSON), &got); err != nil {
+			t.Fatalf("decode command %d: %v", index, err)
+		}
+		if got != notes[index] {
+			t.Fatalf("command %d note = %+v, want %+v", index, got, notes[index])
+		}
+
 		before := h.writer.count()
 		h.send(&application.RequestCompleted{
 			RequestID: command.IdempotencyKey,
@@ -380,10 +383,14 @@ func TestRequestCompletedAdvancesAndCompletesSession(t *testing.T) {
 			Action:    toneAction,
 			State:     application.CommandStateSucceeded,
 		})
-		effects = h.writer.waitFor(t, before+1)
+		wantEffects := before + 1
+		if index < len(notes)-1 {
+			wantEffects = before + 2
+		}
+		effects = h.writer.waitFor(t, wantEffects)
 		record := lastSessionRecord(t, effects)
 		wantStatus := statusPlaying
-		if index == len(commands)-1 {
+		if index == len(notes)-1 {
 			wantStatus = statusCompleted
 		}
 		if record["status"] != wantStatus || record["completed_notes"] != float64(index+1) {
@@ -393,11 +400,19 @@ func TestRequestCompletedAdvancesAndCompletesSession(t *testing.T) {
 		if !ok || lastNote["index"] != float64(index+1) {
 			t.Fatalf("last_note after completion %d = %+v", index, record["last_note"])
 		}
+		if index < len(notes)-1 {
+			commands = requestCommands(effects)
+			next := commands[len(commands)-1]
+			if next.IdempotencyKey == command.IdempotencyKey {
+				t.Fatalf("completion %d did not advance to a new command", index)
+			}
+		}
 	}
 
+	command := commands[len(commands)-1]
 	before := h.writer.count()
 	h.send(&application.RequestCompleted{
-		RequestID: commands[len(commands)-1].IdempotencyKey,
+		RequestID: command.IdempotencyKey,
 		EntityID:  testBindings[0].EntityID,
 		Action:    toneAction,
 		State:     application.CommandStateSucceeded,
@@ -441,6 +456,34 @@ func TestRequestCompletedFailureAndNonTerminalStates(t *testing.T) {
 	record := lastSessionRecord(t, effects)
 	if record["status"] != statusFailed || record["error_code"] != "DEVICE_REJECTED" || record["failed_note"] == nil {
 		t.Fatalf("failed record = %+v", record)
+	}
+}
+
+func TestToneFailureDoesNotQueueNextNote(t *testing.T) {
+	h := newHarness(t, testBindings)
+	response, err := h.run(jobPlaySong, `{"song":"little-star","repeat":1}`, "stop-on-failure")
+	if err != nil || !response.Status.IsOK() {
+		t.Fatalf("RunJob: %+v, %v", response, err)
+	}
+	effects := h.writer.waitFor(t, 2)
+	command := requestCommands(effects)[0]
+	before := h.writer.count()
+	h.send(&application.RequestCompleted{
+		RequestID:  command.IdempotencyKey,
+		EntityID:   testBindings[0].EntityID,
+		Action:     toneAction,
+		State:      application.CommandStateFailed,
+		ErrorCode:  "DEVICE_REJECTED",
+		ResultJSON: `{"detail":"badarg"}`,
+	})
+	effects = h.writer.waitFor(t, before+1)
+	record := lastSessionRecord(t, effects)
+	if record["status"] != statusFailed || record["failed_note"] == nil {
+		t.Fatalf("failed record = %+v", record)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if got := h.writer.count(); got != before+1 {
+		t.Fatalf("failure queued a subsequent note: effects=%d, want %d", got, before+1)
 	}
 }
 

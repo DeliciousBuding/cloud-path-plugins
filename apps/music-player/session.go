@@ -87,6 +87,15 @@ func sessionSummary(session *musicSession, displayBound, indicatorBound bool) st
 	}
 }
 
+func toneCommand(entityID string, command *sessionCommand) *application.RequestCommand {
+	return &application.RequestCommand{
+		EntityID:       entityID,
+		Action:         toneAction,
+		ArgsJSON:       mustJSON(command.Note),
+		IdempotencyKey: command.Key,
+	}
+}
+
 func (s *Service) onRequestCompleted(instanceID string, event *application.RequestCompleted) error {
 	if event == nil {
 		return nil
@@ -96,6 +105,16 @@ func (s *Service) onRequestCompleted(instanceID string, event *application.Reque
 	st := s.instanceLocked(instanceID)
 	session := st.session
 	if session == nil || session.Status == statusCompleted || session.Status == statusFailed {
+		s.mu.Unlock()
+		return nil
+	}
+	if session.NextIndex <= 0 || session.NextIndex > len(session.CommandOrder) {
+		s.mu.Unlock()
+		return nil
+	}
+	// Only the one in-flight note may complete. This prevents an out-of-order
+	// or replayed future completion from skipping notes in the sequence.
+	if event.RequestID != session.CommandOrder[session.NextIndex-1] {
 		s.mu.Unlock()
 		return nil
 	}
@@ -136,6 +155,11 @@ func (s *Service) onRequestCompleted(instanceID string, event *application.Reque
 		session.FailedNote = noteResult
 	}
 	effects := []application.ApplicationEffectUnion{musicSessionRecord(st)}
+	if state == commandSucceeded && session.NextIndex < len(session.CommandOrder) {
+		next := session.Commands[session.CommandOrder[session.NextIndex]]
+		session.NextIndex++
+		effects = append(effects, toneCommand(soundEntity(st), next))
+	}
 	s.mu.Unlock()
 
 	return s.sendEffects(instanceID, effects)
