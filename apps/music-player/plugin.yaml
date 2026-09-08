@@ -1,0 +1,42 @@
+{
+  "apiVersion": "plugins.cloudpath.dev/v1alpha1",
+  "kind": "Application",
+  "id": "io.github.deliciousbuding.cloud-path-app-music-player",
+  "version": "0.1.0",
+  "protocol": 1,
+  "entrypoint": "cloud-path-app-music-player",
+  "compatibility": {
+    "core": ">=0.2.15 <0.3.0"
+  },
+  "permissions": {
+    "hardware": [],
+    "network": [],
+    "filesystem": [],
+    "secrets": []
+  },
+  "requirements": [
+    {
+      "id": "sound",
+      "capability": "cloudpath.dev/capability/buzzer@1",
+      "cardinality": "one"
+    },
+    {
+      "id": "local-display",
+      "capability": "cloudpath.dev/capability/display-text@1",
+      "cardinality": "zero-or-one"
+    },
+    {
+      "id": "indicator",
+      "capability": "cloudpath.dev/capability/led@1",
+      "cardinality": "zero-or-one"
+    }
+  ],
+  "contributes": {
+    "applications": [
+      {
+        "id": "music-player",
+        "title": "音乐播放器"
+      }
+    ]
+  }
+}

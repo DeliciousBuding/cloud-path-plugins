@@ -1,0 +1,142 @@
+package musicplayer
+
+import (
+	"fmt"
+
+	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/application"
+)
+
+func musicSessionRecord(st *instanceState) *application.UpsertDomainRecord {
+	return &application.UpsertDomainRecord{
+		RecordType: sessionRecordType,
+		RecordID:   sessionRecordID,
+		DataJSON:   mustJSON(sessionData(st)),
+		Version:    sessionRecordVer,
+	}
+}
+
+func sessionData(st *instanceState) map[string]any {
+	soundBound := soundEntity(st) != ""
+	displayBound := st != nil && len(st.bindings[displayRequirement]) == 1
+	indicatorBound := st != nil && len(st.bindings[indicatorRequirement]) == 1
+
+	data := map[string]any{
+		"title":                    "音乐播放器",
+		"summary":                  "尚未创建音乐会话。",
+		"song":                     "",
+		"status":                   statusIdle,
+		"queued_at":                "",
+		"last_note":                nil,
+		"repeat":                   0,
+		"request_id":               "",
+		"total_notes":              0,
+		"completed_notes":          0,
+		"error_code":               "",
+		"result_json":              "",
+		"failed_note":              nil,
+		"sound_bound":              soundBound,
+		"local_display_bound":      displayBound,
+		"indicator_bound":          indicatorBound,
+		"degraded":                 !displayBound || !indicatorBound,
+		"runtime_state_persistent": false,
+	}
+
+	if st == nil || st.session == nil {
+		return data
+	}
+	session := st.session
+	data["song"] = session.Song
+	data["status"] = session.Status
+	data["queued_at"] = session.QueuedAt.UTC().Format("2006-01-02T15:04:05.999999999Z07:00")
+	data["repeat"] = session.Repeat
+	data["request_id"] = session.RequestID
+	data["total_notes"] = session.TotalNotes
+	data["completed_notes"] = session.CompletedNotes
+	data["error_code"] = session.ErrorCode
+	data["result_json"] = session.ResultJSON
+	if session.LastNote != nil {
+		data["last_note"] = session.LastNote
+	}
+	if session.FailedNote != nil {
+		data["failed_note"] = session.FailedNote
+	}
+	data["summary"] = sessionSummary(session, displayBound, indicatorBound)
+	return data
+}
+
+func sessionSummary(session *musicSession, displayBound, indicatorBound bool) string {
+	optional := ""
+	if !displayBound && !indicatorBound {
+		optional = " 可选显示与指示灯均未绑定，已按纯声音模式降级。"
+	} else if !displayBound {
+		optional = " 本地显示未绑定，已降级。"
+	} else if !indicatorBound {
+		optional = " 指示灯未绑定，已降级。"
+	}
+	switch session.Status {
+	case statusQueued:
+		return fmt.Sprintf("会话 %s 已排队，共 %d 个音符；等待设备回执。%s", session.RequestID, session.TotalNotes, optional)
+	case statusPlaying:
+		return fmt.Sprintf("会话 %s 正在播放，已完成 %d/%d 个音符。%s", session.RequestID, session.CompletedNotes, session.TotalNotes, optional)
+	case statusCompleted:
+		return fmt.Sprintf("会话 %s 已完成，共 %d 个音符。%s", session.RequestID, session.TotalNotes, optional)
+	case statusFailed:
+		return fmt.Sprintf("会话 %s 失败，已完成 %d/%d 个音符。%s", session.RequestID, session.CompletedNotes, session.TotalNotes, optional)
+	default:
+		return "尚未创建音乐会话。"
+	}
+}
+
+func (s *Service) onRequestCompleted(instanceID string, event *application.RequestCompleted) error {
+	if event == nil {
+		return nil
+	}
+
+	s.mu.Lock()
+	st := s.instanceLocked(instanceID)
+	session := st.session
+	if session == nil || session.Status == statusCompleted || session.Status == statusFailed {
+		s.mu.Unlock()
+		return nil
+	}
+	command := session.Commands[event.RequestID]
+	if command == nil || command.State != commandQueued {
+		s.mu.Unlock()
+		return nil
+	}
+	if event.EntityID != "" && event.EntityID != soundEntity(st) {
+		s.mu.Unlock()
+		return nil
+	}
+	if event.Action != "" && event.Action != toneAction {
+		s.mu.Unlock()
+		return nil
+	}
+	state := terminalCommandState(event.State)
+	if state == "" {
+		s.mu.Unlock()
+		return nil
+	}
+
+	command.State = state
+	noteResult := &NoteResult{Index: command.Index, FrequencyHz: command.Note.FrequencyHz, DurationMS: command.Note.DurationMS}
+	switch state {
+	case commandSucceeded:
+		session.CompletedNotes++
+		session.LastNote = noteResult
+		if session.CompletedNotes >= session.TotalNotes {
+			session.Status = statusCompleted
+		} else {
+			session.Status = statusPlaying
+		}
+	default:
+		session.Status = statusFailed
+		session.ErrorCode = event.ErrorCode
+		session.ResultJSON = event.ResultJSON
+		session.FailedNote = noteResult
+	}
+	effects := []application.ApplicationEffectUnion{musicSessionRecord(st)}
+	s.mu.Unlock()
+
+	return s.sendEffects(instanceID, effects)
+}

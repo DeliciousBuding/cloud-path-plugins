@@ -1,0 +1,19 @@
+{
+  "requirements": [
+    {
+      "id": "sound",
+      "capability": "cloudpath.dev/capability/buzzer@1",
+      "cardinality": "one"
+    },
+    {
+      "id": "local-display",
+      "capability": "cloudpath.dev/capability/display-text@1",
+      "cardinality": "zero-or-one"
+    },
+    {
+      "id": "indicator",
+      "capability": "cloudpath.dev/capability/led@1",
+      "cardinality": "zero-or-one"
+    }
+  ]
+}

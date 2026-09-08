@@ -1,0 +1,612 @@
+package musicplayer
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"os"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/application"
+	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/status"
+)
+
+const testInstance = "music-instance"
+
+var testBindings = []application.Binding{
+	{RequirementID: soundRequirement, EntityID: "entity/buzzer"},
+}
+
+type fakeEventReader struct {
+	events chan *application.ApplicationEvent
+}
+
+func newFakeEventReader() *fakeEventReader {
+	return &fakeEventReader{events: make(chan *application.ApplicationEvent, 32)}
+}
+
+func (r *fakeEventReader) Recv(ctx context.Context) (*application.ApplicationEvent, error) {
+	select {
+	case event, ok := <-r.events:
+		if !ok {
+			return nil, io.EOF
+		}
+		return event, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (r *fakeEventReader) send(event *application.ApplicationEvent) {
+	r.events <- event
+}
+
+type fakeEffectWriter struct {
+	mu      sync.Mutex
+	effects []*application.ApplicationEffect
+	notify  chan struct{}
+}
+
+func newFakeEffectWriter() *fakeEffectWriter {
+	return &fakeEffectWriter{notify: make(chan struct{})}
+}
+
+func (w *fakeEffectWriter) Send(_ context.Context, effect *application.ApplicationEffect) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.effects = append(w.effects, effect)
+	close(w.notify)
+	w.notify = make(chan struct{})
+	return nil
+}
+
+func (w *fakeEffectWriter) count() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return len(w.effects)
+}
+
+func (w *fakeEffectWriter) snapshot() []*application.ApplicationEffect {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	out := make([]*application.ApplicationEffect, len(w.effects))
+	copy(out, w.effects)
+	return out
+}
+
+func (w *fakeEffectWriter) waitFor(t *testing.T, want int) []*application.ApplicationEffect {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		w.mu.Lock()
+		if len(w.effects) >= want {
+			out := make([]*application.ApplicationEffect, len(w.effects))
+			copy(out, w.effects)
+			w.mu.Unlock()
+			return out
+		}
+		notify := w.notify
+		w.mu.Unlock()
+		select {
+		case <-notify:
+		case <-time.After(time.Until(deadline)):
+			t.Fatalf("timed out waiting for %d effects; got %d", want, w.count())
+		}
+	}
+}
+
+type harness struct {
+	t      *testing.T
+	svc    *Service
+	reader *fakeEventReader
+	writer *fakeEffectWriter
+	ctx    context.Context
+	cancel context.CancelFunc
+	done   chan error
+	seq    uint64
+}
+
+func newHarness(t *testing.T, bindings []application.Binding) *harness {
+	t.Helper()
+	svc := New()
+	svc.now = func() time.Time {
+		return time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
+	}
+	configured, err := svc.ConfigureInstance(context.Background(), &application.ConfigureInstanceRequest{
+		PluginInstanceID: testInstance,
+		Config:           []byte(`{}`),
+		ConfigRevision:   1,
+	})
+	if err != nil || !configured.Status.IsOK() {
+		t.Fatalf("ConfigureInstance: %+v, %v", configured, err)
+	}
+	validated, err := svc.ValidateBinding(context.Background(), &application.ValidateBindingRequest{
+		PluginInstanceID: testInstance,
+		Bindings:         bindings,
+	})
+	if err != nil || !validated.Valid {
+		t.Fatalf("ValidateBinding: %+v, %v", validated, err)
+	}
+
+	reader := newFakeEventReader()
+	writer := newFakeEffectWriter()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	h := &harness{t: t, svc: svc, reader: reader, writer: writer, ctx: ctx, cancel: cancel, done: done}
+	go func() { done <- svc.HandleEvents(ctx, reader, writer) }()
+	waitForDefaultWriter(t, svc)
+	t.Cleanup(h.close)
+	return h
+}
+
+func (h *harness) close() {
+	h.cancel()
+	select {
+	case err := <-h.done:
+		if err != nil && !errors.Is(err, context.Canceled) {
+			h.t.Errorf("HandleEvents returned %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		h.t.Error("HandleEvents did not stop")
+	}
+}
+
+func waitForDefaultWriter(t *testing.T, svc *Service) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		svc.mu.Lock()
+		ready := svc.defaultWriter != nil
+		svc.mu.Unlock()
+		if ready {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("event stream did not register an effect writer")
+}
+
+func (h *harness) run(jobID, args, idem string) (*application.RunJobResponse, error) {
+	return h.svc.RunJob(h.ctx, &application.RunJobRequest{
+		PluginInstanceID: testInstance,
+		JobID:            jobID,
+		ArgsJSON:         args,
+		IdempotencyKey:   idem,
+	})
+}
+
+func (h *harness) send(union application.ApplicationEventUnion) {
+	h.seq++
+	h.reader.send(&application.ApplicationEvent{
+		PluginInstanceID: testInstance,
+		Sequence:         h.seq,
+		SchemaVersion:    application.SchemaVersion,
+		Union:            union,
+	})
+}
+
+func lastSessionRecord(t *testing.T, effects []*application.ApplicationEffect) map[string]any {
+	t.Helper()
+	for index := len(effects) - 1; index >= 0; index-- {
+		upsert, ok := effects[index].Union.(*application.UpsertDomainRecord)
+		if !ok || upsert.RecordType != sessionRecordType {
+			continue
+		}
+		var data map[string]any
+		if err := json.Unmarshal([]byte(upsert.DataJSON), &data); err != nil {
+			t.Fatalf("decode session record: %v", err)
+		}
+		return data
+	}
+	t.Fatal("no music_session record in effects")
+	return nil
+}
+
+func requestCommands(effects []*application.ApplicationEffect) []*application.RequestCommand {
+	var commands []*application.RequestCommand
+	for _, effect := range effects {
+		if command, ok := effect.Union.(*application.RequestCommand); ok {
+			commands = append(commands, command)
+		}
+	}
+	return commands
+}
+
+func TestDescriptorAndManifestIdentity(t *testing.T) {
+	svc := New()
+	desc, err := svc.Describe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if desc.ApplicationID != pluginIDValue || desc.Version != pluginVersion || desc.DeclarativeOnly {
+		t.Fatalf("unexpected descriptor identity: %+v", desc)
+	}
+	if len(desc.Requirements) != 3 {
+		t.Fatalf("requirements = %+v", desc.Requirements)
+	}
+	want := map[string]struct {
+		capability  string
+		cardinality string
+	}{
+		soundRequirement:     {soundCapability, "one"},
+		displayRequirement:   {displayCapability, "zero-or-one"},
+		indicatorRequirement: {indicatorCap, "zero-or-one"},
+	}
+	for _, requirement := range desc.Requirements {
+		expected, ok := want[requirement.ID]
+		if !ok || requirement.Capability != expected.capability || requirement.Cardinality != expected.cardinality {
+			t.Fatalf("unexpected requirement: %+v", requirement)
+		}
+	}
+	if len(desc.Jobs) != 3 {
+		t.Fatalf("jobs = %+v", desc.Jobs)
+	}
+	for _, job := range desc.Jobs {
+		if !job.ManualOnly || job.Title == "" || !json.Valid([]byte(job.InputSchemaJSON)) {
+			t.Fatalf("invalid job descriptor: %+v", job)
+		}
+	}
+
+	manifest := readJSONFile(t, "plugin.yaml")
+	if manifest["id"] != pluginIDValue || manifest["version"] != pluginVersion || manifest["entrypoint"] != "cloud-path-app-music-player" {
+		t.Fatalf("manifest identity drift: %+v", manifest)
+	}
+	requirements := readJSONFile(t, "requirements.yaml")["requirements"].([]any)
+	if len(requirements) != 3 {
+		t.Fatalf("requirements mirror = %+v", requirements)
+	}
+}
+
+func TestPlaySongEmitsOrderedToneCommandsAndQueuedRecord(t *testing.T) {
+	h := newHarness(t, testBindings)
+	response, err := h.run(jobPlaySong, `{"song":"little-star","repeat":1}`, "song-1")
+	if err != nil || !response.Status.IsOK() {
+		t.Fatalf("RunJob: %+v, %v", response, err)
+	}
+
+	notes := songCatalog[songLittleStar]
+	effects := h.writer.waitFor(t, len(notes)+1)
+	commands := requestCommands(effects)
+	if len(commands) != len(notes) {
+		t.Fatalf("tone commands = %d, want %d", len(commands), len(notes))
+	}
+	for index, command := range commands {
+		if command.Action != toneAction || command.EntityID != testBindings[0].EntityID || command.IdempotencyKey == "" {
+			t.Fatalf("command %d = %+v", index, command)
+		}
+		var got Note
+		if err := json.Unmarshal([]byte(command.ArgsJSON), &got); err != nil {
+			t.Fatalf("decode command args: %v", err)
+		}
+		if got != notes[index] {
+			t.Fatalf("command %d note = %+v, want %+v", index, got, notes[index])
+		}
+	}
+	for index := 1; index < len(commands); index++ {
+		if commands[index].IdempotencyKey == commands[index-1].IdempotencyKey {
+			t.Fatal("note idempotency keys must be unique")
+		}
+	}
+
+	record := lastSessionRecord(t, effects)
+	if record["song"] != songLittleStar || record["status"] != statusQueued || record["repeat"] != float64(1) || record["last_note"] != nil {
+		t.Fatalf("queued record = %+v", record)
+	}
+	if record["queued_at"] == "" || record["request_id"] == "" || record["sound_bound"] != true || record["degraded"] != true {
+		t.Fatalf("record missing required state: %+v", record)
+	}
+}
+
+func TestPlayNoteBoundsAndValidation(t *testing.T) {
+	h := newHarness(t, testBindings)
+	valid := []string{
+		`{"frequency_hz":1,"duration_ms":10}`,
+		`{"frequency_hz":4000,"duration_ms":1200}`,
+	}
+	for index, args := range valid {
+		before := h.writer.count()
+		response, err := h.run(jobPlayNote, args, "valid-note-"+string(rune('a'+index)))
+		if err != nil || !response.Status.IsOK() {
+			t.Fatalf("valid note %s: %+v, %v", args, response, err)
+		}
+		effects := h.writer.waitFor(t, before+2)
+		commands := requestCommands(effects)
+		if len(commands) == 0 || commands[len(commands)-1].Action != toneAction {
+			t.Fatalf("valid note did not emit tone: %+v", commands)
+		}
+		beforeCompletion := h.writer.count()
+		h.send(&application.RequestCompleted{
+			RequestID: commands[len(commands)-1].IdempotencyKey,
+			EntityID:  testBindings[0].EntityID,
+			Action:    toneAction,
+			State:     application.CommandStateSucceeded,
+		})
+		h.writer.waitFor(t, beforeCompletion+1)
+	}
+
+	invalid := []string{
+		`{"frequency_hz":0,"duration_ms":10}`,
+		`{"frequency_hz":4001,"duration_ms":10}`,
+		`{"frequency_hz":440,"duration_ms":9}`,
+		`{"frequency_hz":440,"duration_ms":11}`,
+		`{"frequency_hz":440,"duration_ms":1201}`,
+		`{"frequency_hz":440,"duration_ms":1205}`,
+		`{"frequency_hz":440,"duration_ms":10,"extra":1}`,
+	}
+	for index, args := range invalid {
+		before := h.writer.count()
+		if _, err := h.run(jobPlayNote, args, "invalid-note-"+string(rune('a'+index))); err == nil {
+			t.Fatalf("invalid note accepted: %s", args)
+		}
+		if got := h.writer.count(); got != before {
+			t.Fatalf("invalid note emitted effects: %s", args)
+		}
+	}
+
+	before := h.writer.count()
+	if _, err := h.run(jobPlaySong, `{"song":"unknown","repeat":1}`, "unknown-song"); err == nil {
+		t.Fatal("unknown song accepted")
+	}
+	if _, err := h.run(jobPlaySong, `{"song":"birthday","repeat":4}`, "bad-repeat"); err == nil {
+		t.Fatal("out-of-range repeat accepted")
+	}
+	if got := h.writer.count(); got != before {
+		t.Fatalf("rejected song jobs emitted effects: got %d, want %d", got, before)
+	}
+}
+
+func TestRequestCompletedAdvancesAndCompletesSession(t *testing.T) {
+	h := newHarness(t, testBindings)
+	response, err := h.run(jobPlaySong, `{"song":"ode-to-joy","repeat":1}`, "complete-song")
+	if err != nil || !response.Status.IsOK() {
+		t.Fatalf("RunJob: %+v, %v", response, err)
+	}
+	notes := songCatalog[songOdeToJoy]
+	effects := h.writer.waitFor(t, len(notes)+1)
+	commands := requestCommands(effects)
+	if len(commands) != len(notes) {
+		t.Fatalf("commands = %d, want %d", len(commands), len(notes))
+	}
+
+	for index, command := range commands {
+		before := h.writer.count()
+		h.send(&application.RequestCompleted{
+			RequestID: command.IdempotencyKey,
+			EntityID:  testBindings[0].EntityID,
+			Action:    toneAction,
+			State:     application.CommandStateSucceeded,
+		})
+		effects = h.writer.waitFor(t, before+1)
+		record := lastSessionRecord(t, effects)
+		wantStatus := statusPlaying
+		if index == len(commands)-1 {
+			wantStatus = statusCompleted
+		}
+		if record["status"] != wantStatus || record["completed_notes"] != float64(index+1) {
+			t.Fatalf("completion %d record = %+v", index, record)
+		}
+		lastNote, ok := record["last_note"].(map[string]any)
+		if !ok || lastNote["index"] != float64(index+1) {
+			t.Fatalf("last_note after completion %d = %+v", index, record["last_note"])
+		}
+	}
+
+	before := h.writer.count()
+	h.send(&application.RequestCompleted{
+		RequestID: commands[len(commands)-1].IdempotencyKey,
+		EntityID:  testBindings[0].EntityID,
+		Action:    toneAction,
+		State:     application.CommandStateSucceeded,
+	})
+	time.Sleep(20 * time.Millisecond)
+	if got := h.writer.count(); got != before {
+		t.Fatalf("duplicate completion emitted effects: got %d, want %d", got, before)
+	}
+}
+
+func TestRequestCompletedFailureAndNonTerminalStates(t *testing.T) {
+	h := newHarness(t, testBindings)
+	response, err := h.run(jobPlayNote, `{"frequency_hz":440,"duration_ms":100}`, "failure-song")
+	if err != nil || !response.Status.IsOK() {
+		t.Fatalf("RunJob: %+v, %v", response, err)
+	}
+	effects := h.writer.waitFor(t, 2)
+	command := requestCommands(effects)[0]
+
+	before := h.writer.count()
+	h.send(&application.RequestCompleted{
+		RequestID: command.IdempotencyKey,
+		EntityID:  testBindings[0].EntityID,
+		Action:    toneAction,
+		State:     application.CommandStateRunning,
+	})
+	time.Sleep(20 * time.Millisecond)
+	if got := h.writer.count(); got != before {
+		t.Fatalf("non-terminal state emitted effects: got %d, want %d", got, before)
+	}
+
+	h.send(&application.RequestCompleted{
+		RequestID:  command.IdempotencyKey,
+		EntityID:   testBindings[0].EntityID,
+		Action:     toneAction,
+		State:      application.CommandStateFailed,
+		ErrorCode:  "DEVICE_REJECTED",
+		ResultJSON: `{"detail":"badarg"}`,
+	})
+	effects = h.writer.waitFor(t, before+1)
+	record := lastSessionRecord(t, effects)
+	if record["status"] != statusFailed || record["error_code"] != "DEVICE_REJECTED" || record["failed_note"] == nil {
+		t.Fatalf("failed record = %+v", record)
+	}
+}
+
+func TestIdempotencyKeyIsStableAndRejectsDrift(t *testing.T) {
+	h := newHarness(t, testBindings)
+	args := `{"song":"birthday","repeat":2}`
+	first, err := h.run(jobPlaySong, args, "same-key")
+	if err != nil || !first.Status.IsOK() {
+		t.Fatalf("first run: %+v, %v", first, err)
+	}
+	firstCount := h.writer.count()
+	firstRecord := lastSessionRecord(t, h.writer.snapshot())
+	firstRequestID := firstRecord["request_id"]
+
+	second, err := h.run(jobPlaySong, args, "same-key")
+	if err != nil || !second.Status.IsOK() {
+		t.Fatalf("second run: %+v, %v", second, err)
+	}
+	if second.ResultJSON != first.ResultJSON || h.writer.count() != firstCount {
+		t.Fatal("idempotent retry emitted duplicate effects or changed result")
+	}
+	secondRecord := readJSON(t, second.ResultJSON)
+	if secondRecord["request_id"] != firstRequestID {
+		t.Fatalf("request_id changed on retry: %v -> %v", firstRequestID, secondRecord["request_id"])
+	}
+
+	if _, err := h.run(jobPlaySong, `{"song":"birthday","repeat":1}`, "same-key"); err == nil {
+		t.Fatal("idempotency key reuse with different args was accepted")
+	} else {
+		var st *status.Status
+		if !errors.As(err, &st) || st.Code != status.CodeInvalidArgument {
+			t.Fatalf("drift error = %v, want INVALID_ARGUMENT", err)
+		}
+	}
+}
+
+func TestBindingDegradationAndStatus(t *testing.T) {
+	h := newHarness(t, testBindings)
+	response, err := h.run(jobStatus, `{}`, "status-1")
+	if err != nil || !response.Status.IsOK() {
+		t.Fatalf("status: %+v, %v", response, err)
+	}
+	record := readJSON(t, response.ResultJSON)
+	if record["status"] != statusIdle || record["degraded"] != true || record["local_display_bound"] != false || record["indicator_bound"] != false {
+		t.Fatalf("degraded status = %+v", record)
+	}
+
+	validated, err := h.svc.ValidateBinding(context.Background(), &application.ValidateBindingRequest{
+		PluginInstanceID: testInstance,
+		Bindings: []application.Binding{
+			{RequirementID: soundRequirement, EntityID: "entity/buzzer"},
+			{RequirementID: displayRequirement, EntityID: "entity/display"},
+			{RequirementID: indicatorRequirement, EntityID: "entity/led"},
+		},
+	})
+	if err != nil || !validated.Valid {
+		t.Fatalf("optional bindings: %+v, %v", validated, err)
+	}
+	response, err = h.run(jobStatus, `{}`, "status-2")
+	if err != nil || !response.Status.IsOK() {
+		t.Fatalf("status after optional bindings: %+v, %v", response, err)
+	}
+	record = readJSON(t, response.ResultJSON)
+	if record["degraded"] != false || record["local_display_bound"] != true || record["indicator_bound"] != true {
+		t.Fatalf("non-degraded status = %+v", record)
+	}
+
+	invalid := []application.Binding{
+		{RequirementID: soundRequirement, EntityID: "entity/buzzer"},
+		{RequirementID: soundRequirement, EntityID: "entity/buzzer-2"},
+	}
+	if result, err := h.svc.ValidateBinding(context.Background(), &application.ValidateBindingRequest{PluginInstanceID: testInstance, Bindings: invalid}); err != nil || result.Valid {
+		t.Fatalf("duplicate sound binding accepted: %+v, %v", result, err)
+	}
+	unknown := []application.Binding{{RequirementID: "driver:vendor", EntityID: "entity/driver"}}
+	if result, err := h.svc.ValidateBinding(context.Background(), &application.ValidateBindingRequest{PluginInstanceID: testInstance, Bindings: unknown}); err != nil || result.Valid {
+		t.Fatalf("unknown requirement accepted: %+v, %v", result, err)
+	}
+}
+
+func TestConfigureRejectsUnknownFieldsAndHTTPStatus(t *testing.T) {
+	svc := New()
+	response, err := svc.ConfigureInstance(context.Background(), &application.ConfigureInstanceRequest{
+		PluginInstanceID: testInstance,
+		Config:           []byte(`{"unexpected":true}`),
+		ConfigRevision:   1,
+	})
+	if err != nil || response.Status.IsOK() {
+		t.Fatalf("unknown config accepted: %+v, %v", response, err)
+	}
+
+	h := newHarness(t, testBindings)
+	httpResponse, err := h.svc.HandleRequest(context.Background(), &application.PluginHTTPRequest{
+		Method:           "GET",
+		Path:             "/status",
+		PluginInstanceID: testInstance,
+		Context:          application.RequestContext{InstanceID: testInstance},
+	})
+	if err != nil || httpResponse.StatusCode != 200 || !strings.Contains(string(httpResponse.Body), `"status":"idle"`) {
+		t.Fatalf("GET /status: %+v, %v", httpResponse, err)
+	}
+	httpResponse, err = h.svc.HandleRequest(context.Background(), &application.PluginHTTPRequest{
+		Method:           "POST",
+		Path:             "/status",
+		PluginInstanceID: testInstance,
+		Context:          application.RequestContext{InstanceID: testInstance},
+	})
+	if err != nil || httpResponse.StatusCode != 405 {
+		t.Fatalf("POST /status: %+v, %v", httpResponse, err)
+	}
+}
+
+func TestSongCatalogNotesSatisfyToneContract(t *testing.T) {
+	for song, notes := range songCatalog {
+		for index, note := range notes {
+			if err := validateNote(note); err != nil {
+				t.Fatalf("%s note %d violates tone contract: %+v: %v", song, index, note, err)
+			}
+		}
+	}
+}
+
+func TestSingleActiveSessionAndRebindingGuard(t *testing.T) {
+	h := newHarness(t, testBindings)
+	first, err := h.run(jobPlaySong, `{"song":"little-star","repeat":1}`, "active-1")
+	if err != nil || !first.Status.IsOK() {
+		t.Fatalf("first session: %+v, %v", first, err)
+	}
+	before := h.writer.count()
+
+	if _, err := h.run(jobPlayNote, `{"frequency_hz":440,"duration_ms":100}`, "active-2"); err == nil {
+		t.Fatal("overlapping play session was accepted")
+	}
+	if got := h.writer.count(); got != before {
+		t.Fatalf("overlapping session emitted effects: got %d, want %d", got, before)
+	}
+
+	changed, err := h.svc.ValidateBinding(context.Background(), &application.ValidateBindingRequest{
+		PluginInstanceID: testInstance,
+		Bindings:         []application.Binding{{RequirementID: soundRequirement, EntityID: "entity/other-buzzer"}},
+	})
+	if err != nil || changed.Valid {
+		t.Fatalf("rebinding while active was accepted: %+v, %v", changed, err)
+	}
+	unchanged, err := h.svc.ValidateBinding(context.Background(), &application.ValidateBindingRequest{
+		PluginInstanceID: testInstance,
+		Bindings:         testBindings,
+	})
+	if err != nil || !unchanged.Valid {
+		t.Fatalf("same binding while active was rejected: %+v, %v", unchanged, err)
+	}
+}
+func readJSONFile(t *testing.T, name string) map[string]any {
+	t.Helper()
+	data, err := os.ReadFile(name)
+	if err != nil {
+		t.Fatalf("read %s: %v", name, err)
+	}
+	return readJSON(t, string(data))
+}
+
+func readJSON(t *testing.T, text string) map[string]any {
+	t.Helper()
+	var value map[string]any
+	if err := json.Unmarshal([]byte(text), &value); err != nil {
+		t.Fatalf("decode JSON %q: %v", text, err)
+	}
+	return value
+}
