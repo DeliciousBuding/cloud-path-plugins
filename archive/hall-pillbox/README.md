@@ -126,11 +126,11 @@ python scripts/validate_manifest.py --dir . plugin.yaml
 
 ### 7.1 手动真板 E2E（不会自动执行）
 
-`scripts/e2e_hall_pillbox.py` 是人工触发的真板验收脚本：只走 CloudPath REST API，不直接打开 COM3、不启动/停止 Edge，也不打印凭据值。默认是 dry-run；只有显式 `--execute` 且处于交互式终端时才会执行写操作。脚本会创建独立实例，覆盖 `start-window`、`close` 不确认、`away`/兼容 `open` 确认、领域记录和停止命令回执，并在 `finally` 删除隔离实例。
+`scripts/e2e_hall_pillbox.py` 是人工触发的真板验收脚本：只走 CloudPath REST API，不直接打开 COM3、不启动/停止 Edge，也不打印凭据值。默认是 dry-run；只有显式 `--execute` 且处于交互式终端时才会执行写操作。该流程会发 buzzer 命令，因此默认 fail-closed：还必须显式传入 `--allow-audible`，否则在任何 API 写入前拒绝执行。脚本会创建独立实例，覆盖 `start-window`、`close` 不确认、`away`/兼容 `open` 确认、领域记录和停止命令回执，并在 `finally` 删除隔离实例。
 
 ```bash
 python scripts/e2e_hall_pillbox.py                 # 仅打印计划，不连接网络
-python scripts/e2e_hall_pillbox.py --execute --takeover-box-prod
+python scripts/e2e_hall_pillbox.py --execute --takeover-box-prod --allow-audible
 ```
 
 `box-prod` 当前占用同一 `buzzer` 时，脚本默认拒绝运行并给出冲突提示；确认要临时接管生产实例后再加 `--takeover-box-prod`，脚本会在结束后恢复其原 `enabled` 状态。真板事件必须由操作者移动磁铁产生：先保持 away（开盖）启动窗口，再把磁铁靠近产生 `close`（应保持 `opened`），最后移开产生 `away`/`open`（应变为 `completed`、`confirmation_source=hall`）。本脚本不接入 CI 或无人值守任务。

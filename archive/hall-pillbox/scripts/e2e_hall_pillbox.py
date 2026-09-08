@@ -7,10 +7,11 @@ terminal because the hall ``close`` and ``away``/``open`` events must be
 produced by moving the physical magnet.
 
 The script never prints credential values.  Run without ``--execute`` first to
-see the exact mutation plan.  A real run needs ``--execute`` and, when the
-production ``box-prod`` instance is active, ``--takeover-box-prod`` so the
-script can temporarily release the exclusive buzzer binding and restore it in
-``finally``.
+see the exact mutation plan.  This flow emits buzzer commands, so execution is
+fail-closed: a real run additionally requires the explicit ``--allow-audible``
+flag.  When the production ``box-prod`` instance is active, it also requires
+``--takeover-box-prod`` so the script can temporarily release the exclusive
+buzzer binding and restore it in ``finally``.
 """
 
 from __future__ import annotations
@@ -582,6 +583,11 @@ def selected_event_fields(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def execute(args: argparse.Namespace) -> dict[str, Any]:
+    if not getattr(args, "allow_audible", False):
+        raise E2EError(
+            "refusing to run Hall Pillbox E2E: it emits buzzer commands; "
+            "pass --allow-audible only after explicit approval"
+        )
     api = CloudPathApi(args.base_url, timeout=args.http_timeout)
     credentials = load_credentials(args.credentials_file)
     box_state: Optional[BoxProdState] = None
@@ -838,6 +844,11 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="temporarily disable the production box-prod instance and restore it in finally",
     )
+    parser.add_argument(
+        "--allow-audible",
+        action="store_true",
+        help="explicitly allow this E2E to send buzzer commands; default is fail-closed",
+    )
     parser.add_argument("--base-url", default=os.environ.get("CLOUDPATH_BASE_URL", DEFAULT_BASE_URL))
     parser.add_argument(
         "--credentials-file",
@@ -879,7 +890,8 @@ def print_plan(args: argparse.Namespace) -> None:
     print(f"plugin={PLUGIN_ID}@{args.plugin_version}")
     print("写操作计划：创建隔离实例；禁用并恢复 box-prod（仅在 --takeover-box-prod 时）；finally 删除隔离实例。")
     print("真板手动步骤：磁铁离开 -> start-window -> close（应忽略）-> away/open（应确认）。")
-    print("执行真板 E2E：python scripts/e2e_hall_pillbox.py --execute --takeover-box-prod")
+    print("注意：该流程会发 buzzer 命令；默认拒绝执行，只有显式 --allow-audible 才会运行。")
+    print("执行真板 E2E：python scripts/e2e_hall_pillbox.py --execute --takeover-box-prod --allow-audible")
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -887,6 +899,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     if not args.execute:
         print_plan(args)
         return 0
+    if not args.allow_audible:
+        print(
+            "E2E REFUSED: Hall Pillbox emits buzzer commands; pass --allow-audible only after explicit approval.",
+            file=sys.stderr,
+        )
+        return 2
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         print(
             "E2E FAILED: 真板事件需要交互式终端；拒绝在无人值守环境执行。",
