@@ -148,14 +148,20 @@ func (s *Service) onRequestCompleted(instanceID string, event *application.Reque
 		} else {
 			session.Status = statusPlaying
 		}
-	default:
+	case commandFailed, commandTimedOut, commandCancelled:
 		session.Status = statusFailed
 		session.ErrorCode = event.ErrorCode
 		session.ResultJSON = event.ResultJSON
 		session.FailedNote = noteResult
+		// Fail closed: once a note reaches a non-success terminal state, no
+		// later note may be emitted even if another event reaches this path.
+		session.NextIndex = len(session.CommandOrder) + 1
+	default:
+		s.mu.Unlock()
+		return nil
 	}
 	effects := []application.ApplicationEffectUnion{musicSessionRecord(st)}
-	if state == commandSucceeded && session.NextIndex < len(session.CommandOrder) {
+	if state == commandSucceeded && session.Status == statusPlaying && session.NextIndex < len(session.CommandOrder) {
 		next := session.Commands[session.CommandOrder[session.NextIndex]]
 		session.NextIndex++
 		effects = append(effects, toneCommand(soundEntity(st), next))
