@@ -727,3 +727,42 @@ func TestCallTimeoutRecordFlushesAfterStreamReconnect(t *testing.T) {
 		}
 	})
 }
+
+// Omitting pattern from the console schema must not relax runtime validation.
+func TestAcknowledgeTextInputValidation(t *testing.T) {
+	f := newCallFixture(t, `{"mode":"service-call"}`, callBindings)
+	requestID := f.request("text-input-request")
+	f.writer.take()
+	for _, tc := range []struct {
+		name  string
+		value string
+	}{
+		{"empty", ""},
+		{"space", " "},
+		{"tab", "\t"},
+		{"newline", "\n"},
+		{"leading-space", " " + requestID},
+		{"trailing-space", requestID + " "},
+		{"embedded-space", "call- bad"},
+		{"embedded-tab", "call-\tbad"},
+		{"trailing-newline", requestID + "\n"},
+		{"carriage-return", requestID + "\r"},
+		{"form-feed", requestID + "\f"},
+		{"vertical-tab", requestID + "\v"},
+		{"non-breaking-space", requestID + "\u00a0"},
+		{"ideographic-space", requestID + "\u3000"},
+		{"too-long", strings.Repeat("x", 129)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := f.job(jobAcknowledge, mustJSON(map[string]string{"request_id": tc.value}), "invalid-"+tc.name)
+			var st *status.Status
+			if !errors.As(err, &st) || st.Code != status.CodeInvalidArgument {
+				t.Fatalf("expected INVALID_ARGUMENT, got %v", err)
+			}
+			requireNoCallEffects(t, f)
+		})
+	}
+	if got := f.acknowledge(requestID, "text-input-ack"); got != requestID {
+		t.Fatalf("acknowledged %q, want generated request ID %q", got, requestID)
+	}
+}

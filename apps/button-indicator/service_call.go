@@ -23,8 +23,9 @@ const (
 	pendingLEDMask = 255
 
 	// Required explicit input also fails closed on hosts that ignore ManualOnly.
-	requestJobSchema     = `{"type":"object","properties":{"confirm":{"type":"boolean","const":true,"title":"确认发起呼叫"},"note":{"type":"string","maxLength":256,"title":"请求说明（可选）"}},"required":["confirm"],"additionalProperties":false}`
-	acknowledgeJobSchema = `{"type":"object","properties":{"request_id":{"type":"string","minLength":1,"maxLength":128,"pattern":"^\\S+$","title":"待处理请求编号","description":"使用发起呼叫返回的 request_id；不会确认其它请求。"}},"required":["request_id"],"additionalProperties":false}`
+	requestJobSchema = `{"type":"object","properties":{"confirm":{"type":"boolean","const":true,"title":"确认发起呼叫"},"note":{"type":"string","maxLength":256,"title":"请求说明（可选）"}},"required":["confirm"],"additionalProperties":false}`
+	// Keep the console text form: pattern is unsupported; RunJob validates whitespace.
+	acknowledgeJobSchema = `{"type":"object","properties":{"request_id":{"type":"string","minLength":1,"maxLength":128,"title":"待处理请求编号","description":"使用发起呼叫返回的 request_id；不会确认其它请求。"}},"required":["request_id"],"additionalProperties":false}`
 )
 
 // A business acknowledgement and an actuator result are different facts.

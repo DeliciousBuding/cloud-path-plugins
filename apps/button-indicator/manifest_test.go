@@ -58,6 +58,10 @@ func TestManifestMatchesCode(t *testing.T) {
 		}
 	}
 
+	if !strings.Contains(repoFile(t, "README.md"), "Version **"+pluginVersion+"**") {
+		t.Fatal("README.md current version does not match the service")
+	}
+
 	// requirements.yaml mirrors the machine manifest
 	r := repoFile(t, "requirements.yaml")
 	for _, cap := range []string{keyCap, ledCap, buzzerCp} {
@@ -171,12 +175,12 @@ func TestServiceCallJobInputSchemas(t *testing.T) {
 		var schema struct {
 			Type       string `json:"type"`
 			Properties map[string]struct {
-				Type      string `json:"type"`
-				Title     string `json:"title"`
-				Const     *bool  `json:"const"`
-				MinLength int    `json:"minLength"`
-				MaxLength int    `json:"maxLength"`
-				Pattern   string `json:"pattern"`
+				Type      string          `json:"type"`
+				Title     string          `json:"title"`
+				Const     *bool           `json:"const"`
+				MinLength int             `json:"minLength"`
+				MaxLength int             `json:"maxLength"`
+				Pattern   json.RawMessage `json:"pattern"`
 			} `json:"properties"`
 			Required             []string `json:"required"`
 			AdditionalProperties *bool    `json:"additionalProperties"`
@@ -194,11 +198,14 @@ func TestServiceCallJobInputSchemas(t *testing.T) {
 			}
 		} else {
 			id := schema.Properties["request_id"]
-			if len(schema.Properties) != 1 || schema.Required[0] != "request_id" || id.Type != "string" || id.MinLength != 1 || id.MaxLength != 128 || id.Pattern != `^\S+$` {
+			if len(schema.Properties) != 1 || schema.Required[0] != "request_id" || id.Type != "string" || id.MinLength != 1 || id.MaxLength != 128 {
 				t.Fatalf("acknowledge schema disagrees with validation: %+v", schema)
 			}
 		}
 		for field, property := range schema.Properties {
+			if property.Pattern != nil {
+				t.Fatalf("%s.%s must omit pattern to retain the console text form", job.ID, field)
+			}
 			if property.Title == "" {
 				t.Fatalf("%s.%s has no understandable form label", job.ID, field)
 			}
