@@ -55,7 +55,7 @@ Edge 把每台设备的 port/baud/name/protocol 作为 OpenDevice connection hin
 - Hall：当前磁场电平 + close/away event；
 - Vibration：当前电平 + quake event；
 - K1 / K2 / K3：独立状态与 press/release event；
-- Buzzer；
+- Buzzer：档位提示音，以及 Protocol v1 的原始音调（`tone`）；
 - LED L0-L7：8-bit mask 独立控制；
 - 8-digit display：HH-MM-SS、数字、空白/横线/H/L/小数点字形；
 - Step motor connector；
@@ -67,7 +67,7 @@ Edge 把每台设备的 port/baud/name/protocol 作为 OpenDevice connection hin
 
 Capability 的中文标题、动作标题与参数说明由本 Driver 的 Describe 声明；Core / WebUI 只消费声明，
 不维护 STC-B 文案表。完整动作展示元数据需要 Core 0.2.13 或更新版本；旧 Core 仍可使用既有
-动作与参数协议，但可能只显示动作标识。此版本不新增动作，也不为普通执行器臆造破坏性标记。
+动作与参数协议，但可能只显示动作标识。本版本在 Buzzer 能力上新增 `tone` 动作，也不为普通执行器臆造破坏性标记。
 
 Alarm、compartment、服药时段不属于板载 Driver；这些业务只由 Application Plugin 通过 Capability 组合。
 
@@ -76,20 +76,20 @@ Alarm、compartment、服药时段不属于板载 Driver；这些业务只由 Ap
 生产命令使用 CMD:<id>:<verb> 行协议。Driver 只有在收到相同 id 的板端 ACK 后才返回 SUCCEEDED；ERR 和 ACK timeout 都返回 FAILED。UART write success 绝不算设备执行成功。
 
 - LED / Display：板端 API 执行后 ACK；
-- Buzzer：实际发声完成后 ACK；
+- Buzzer / Tone：实际发声完成后 ACK；
 - Motor：实际转动完成后 ACK；
 - 每块板命令串行，不同板可并发；
 - 一块串口断开只关闭该设备的 Watch，Edge 单独重连，不影响同进程其他板。
 
 命令面（唯一事实源 `plugin/command.go` 的 `supportedActions`）：
-`buzzer` / `led` / `display` / `motor` / `sensor` / `sync` / `diag` / `isp` / `raw`。
+`buzzer` / `tone` / `led` / `display` / `motor` / `sensor` / `sync` / `diag` / `isp` / `raw`。
 
 - `diag` 只存在于 Protocol v1（`CMD:<id>:diag`）。legacy 单字符 `D` 在板上是 ISP 下载模式，
-  Driver 不会把诊断命令编成 `D`（单测锁定）。
+  Driver 不会把诊断命令编成 `D`（单测锁定）。`tone` 同样只存在于 Protocol v1；legacy 明确拒绝，不会降级成档位 `buzzer`。
 - Legacy `V/B/L/N/T` 只用于旧探针固件 bring-up：没有关联 ACK，Driver 只诚实报告下发与回帧事实。
 - 两种协议都在写 UART 前校验动作声明：`buzzer` 必须同时提供 `freq` / `duration`，`motor` 必须提供
-  `steps`；`led` 的 `mask` / `pattern` 和 `display` 的 `digits` / `codes` / `mode` 分别只能选一种。
-  缺值、`null` 或多个方案会返回错误，显式 `0` 仍合法。Legacy LED 仅支持 `pattern`；`mask` 须使用 v1。
+  `steps`；`tone` 必须且只能提供整数 `frequency_hz`（1–4000）/ `duration_ms`（10–1200，且为 10 的倍数）；`led` 的 `mask` / `pattern` 和 `display` 的 `digits` / `codes` / `mode` 分别只能选一种。
+  缺值、`null` 或多个方案会返回错误；既有 `buzzer` / `motor` 等动作的显式 `0` 仍合法，`tone` 的 0 越界。Legacy LED 仅支持 `pattern`；`mask` 须使用 v1。
 - v1 `sync.time` 只接受有效 `HHMMSS`，`sync.hhmm` 只接受有效 `HHMM`；两者同时存在时沿用 `time`
   优先的兼容行为，空参数仍自动北京时间校时。Legacy `raw` 的 JSON 解码结果最多 64 UTF-8 字节，
   不接受 CR / LF / NUL；这些控制字符也不能进入 v1 命令 ID。

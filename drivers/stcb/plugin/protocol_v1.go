@@ -171,6 +171,22 @@ func encodeV1Command(id, action, argsJSON string) ([]byte, error) {
 	}
 	verb, args := action, ""
 	switch action {
+	case actionTone:
+		var a struct {
+			FrequencyHz int `json:"frequency_hz"`
+			DurationMs  int `json:"duration_ms"`
+		}
+		if err := json.Unmarshal([]byte(argsJSON), &a); err != nil {
+			return nil, fmt.Errorf("stcb: tone args: %w", err)
+		}
+		if a.FrequencyHz < 1 || a.FrequencyHz > 4000 {
+			return nil, fmt.Errorf("stcb: tone frequency_hz must be 1-4000")
+		}
+		if a.DurationMs < 10 || a.DurationMs > 1200 || a.DurationMs%10 != 0 {
+			return nil, fmt.Errorf("stcb: tone duration_ms must be 10-1200 and a multiple of 10")
+		}
+		args = fmt.Sprintf("freq=%d,dur=%d", a.FrequencyHz, a.DurationMs/10)
+		verb = "beep"
 	case actionBuzzer:
 		var a struct {
 			Freq     int `json:"freq"`

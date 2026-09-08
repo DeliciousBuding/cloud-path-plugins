@@ -97,6 +97,16 @@ var buzzerActionSchema = map[string]any{
 	"required": []any{"freq", "duration"},
 }
 
+var toneActionSchema = map[string]any{
+	"type":                 "object",
+	"additionalProperties": false,
+	"properties": map[string]any{
+		"frequency_hz": map[string]any{"type": "integer", "minimum": 1, "maximum": 4000, "title": "频率 (Hz)"},
+		"duration_ms":  map[string]any{"type": "integer", "minimum": 10, "maximum": 1200, "multipleOf": 10, "title": "时长 (ms，10 的倍数)"},
+	},
+	"required": []any{"frequency_hz", "duration_ms"},
+}
+
 var ledActionSchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
@@ -145,7 +155,7 @@ func capabilityDescriptors() []driver.CapabilityDescriptor {
 		{ID: capHall, Title: "磁场检测", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "integer", Access: "read"}}, Events: []driver.EventDescriptor{{Name: "changed", PayloadSchemaJSON: "{}"}}},
 		{ID: capVib, Title: "振动检测", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "integer", Access: "read"}}, Events: []driver.EventDescriptor{{Name: "quake", PayloadSchemaJSON: "{}"}}},
 		{ID: capKey, Title: "按键", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "integer", Access: "read"}}, Events: []driver.EventDescriptor{{Name: "pressed", PayloadSchemaJSON: "{}"}, {Name: "released", PayloadSchemaJSON: "{}"}}},
-		{ID: capBuzzer, Title: "蜂鸣器", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "string", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionBuzzer, Title: "播放提示音", Description: "按频率档和时长档播放，完成后返回设备回执。", InputSchemaJSON: mustJSON(buzzerActionSchema)}}},
+		{ID: capBuzzer, Title: "蜂鸣器", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "string", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionBuzzer, Title: "播放提示音", Description: "按频率档和时长档播放，完成后返回设备回执。", InputSchemaJSON: mustJSON(buzzerActionSchema)}, {Name: actionTone, Title: "播放原始音调", Description: "按 1-4000 Hz 频率和 10-1200 ms 时长播放，完成后返回设备回执。", InputSchemaJSON: mustJSON(toneActionSchema)}}},
 		{ID: capLED, Title: "LED 灯组", Properties: []driver.PropertyDescriptor{{Name: "mask", Type: "integer", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionLED, Title: "设置指示灯", Description: "mask 与 pattern 二选一；mask 的每一位对应 L0–L7。", InputSchemaJSON: mustJSON(ledActionSchema)}}},
 		{ID: capDisplay, Title: "数码管", Properties: []driver.PropertyDescriptor{{Name: "mode", Type: "string", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionDisplay, Title: "设置数码管", Description: "digits、codes、mode 三选一；mode 为 clock 时恢复时钟。", InputSchemaJSON: mustJSON(displayActionSchema)}}},
 		{ID: capMotor, Title: "步进电机接口", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "string", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionMotor, Title: "控制步进电机", Description: "steps 为步数档；0 停止，1–4 对应 50–200 步。", InputSchemaJSON: mustJSON(motorActionSchema)}}},

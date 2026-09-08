@@ -9,6 +9,7 @@ import (
 // 执行器命令 key（Capability action 键 == 命令白名单命令名）。
 const (
 	actionBuzzer  = "buzzer"
+	actionTone    = "tone"
 	actionLED     = "led"
 	actionDisplay = "display"
 	actionMotor   = "motor"
@@ -21,7 +22,7 @@ const (
 
 // supportedActions 是 Execute 支持的全部 action 白名单（唯一事实源）。
 var supportedActions = []string{
-	actionBuzzer, actionLED, actionDisplay, actionMotor,
+	actionBuzzer, actionTone, actionLED, actionDisplay, actionMotor,
 	actionSensor, actionSync, actionDiag, actionISP, actionRaw,
 }
 
@@ -29,6 +30,7 @@ var supportedActions = []string{
 var slowActions = map[string]bool{
 	actionSync:    true,
 	actionBuzzer:  true,
+	actionTone:    true,
 	actionLED:     true,
 	actionDisplay: true,
 	actionMotor:   true,
@@ -48,6 +50,8 @@ func encodeCommand(action, argsJSON string) ([]byte, error) {
 	case actionDiag:
 		// 'D' 在板上是 ISP 下载模式，绝不能被诊断命令误触发；诊断只存在于 Protocol v1。
 		return nil, fmt.Errorf("stcb: diag 需要 Protocol v1 固件（CMD:<id>:diag）")
+	case actionTone:
+		return nil, fmt.Errorf("stcb: tone requires Protocol v1 firmware (CMD:<id>:beep)")
 	case actionBuzzer:
 		return encodeBuzzer(argsJSON)
 	case actionLED:
@@ -72,6 +76,8 @@ func validateActionArgs(action, argsJSON string) error {
 	switch action {
 	case actionBuzzer:
 		required = []string{"freq", "duration"}
+	case actionTone:
+		required = []string{"frequency_hz", "duration_ms"}
 	case actionMotor:
 		required = []string{"steps"}
 	case actionLED:
@@ -87,6 +93,9 @@ func validateActionArgs(action, argsJSON string) error {
 	}
 	if fields == nil {
 		return fmt.Errorf("stcb: %s args must be a JSON object", action)
+	}
+	if action == actionTone && len(fields) != 2 {
+		return fmt.Errorf("stcb: tone accepts only frequency_hz and duration_ms")
 	}
 	for _, key := range required {
 		value, ok := fields[key]

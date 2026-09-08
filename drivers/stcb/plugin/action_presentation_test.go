@@ -22,7 +22,7 @@ func TestDescribeActionPresentationSurvivesJSON(t *testing.T) {
 	if err := json.Unmarshal(wire, &restored); err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]bool{actionBuzzer: true, actionLED: true, actionDisplay: true, actionMotor: true, actionDiag: true}
+	want := map[string]bool{actionBuzzer: true, actionTone: true, actionLED: true, actionDisplay: true, actionMotor: true, actionDiag: true}
 	for _, capability := range restored.Capabilities {
 		if strings.TrimSpace(capability.Title) == "" {
 			t.Fatalf("capability %s lost its display title", capability.ID)
