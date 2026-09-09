@@ -16,7 +16,7 @@ import (
 
 const (
 	pluginIDValue = "io.github.deliciousbuding.cloud-path-app-hall-pillbox"
-	pluginVersion = "0.1.7"
+	pluginVersion = "0.1.8"
 
 	jobStartWindow   = "start-window"
 	jobConfirmWindow = "confirm-window"
