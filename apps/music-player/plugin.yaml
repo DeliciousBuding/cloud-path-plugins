@@ -2,7 +2,7 @@
   "apiVersion": "plugins.cloudpath.dev/v1alpha1",
   "kind": "Application",
   "id": "io.github.deliciousbuding.cloud-path-app-music-player",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "protocol": 1,
   "entrypoint": "cloud-path-app-music-player",
   "compatibility": {
@@ -43,7 +43,7 @@
             "icon": "music",
             "order": 50,
             "route": "music",
-            "visibility": "instance-enabled"
+            "visibility": "always"
           },
           "pages": [
             {

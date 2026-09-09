@@ -10,7 +10,7 @@ Version **0.2.3**；需要 Core `>=0.2.15 <0.3.0` 和公开 Go SDK v0.2.15。
 
 ## Web UI 贡献
 
-Manifest 声明 `ui.apiVersion: 1`，安装并启用实例后注册导航“音乐播放器”和独立路由 `/apps/music`。首页由 Core 白名单 section 渲染：播放会话状态、来自 `music_session` 记录的指标、`play-song` / `play-note` 手动操作和 `music_session` 时间线；不注入 JavaScript、HTML 或远程资源。当前配置为空，因此不显示配置表单。
+Manifest 声明 `ui.apiVersion: 1`，安装并启用实例后注册导航“音乐播放器”和独立路由 `/apps/music`。 停用后入口仍保留，页面会明确显示当前未启用。首页由 Core 白名单 section 渲染：播放会话状态、来自 `music_session` 记录的指标、`play-song` / `play-note` 手动操作和 `music_session` 时间线；不注入 JavaScript、HTML 或远程资源。当前配置为空，因此不显示配置表单。
 
 ## Capability requirements
 
@@ -28,7 +28,7 @@ Manifest 声明 `ui.apiVersion: 1`，安装并启用实例后注册导航“音�
 
 ## Configuration
 
-版本 0.2.3 没有业务配置字段。`app_config` 必须是空 JSON object：
+版本 0.2.4 没有业务配置字段。`app_config` 必须是空 JSON object：
 
 ```json
 {}
