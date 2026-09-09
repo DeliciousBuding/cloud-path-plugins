@@ -18,7 +18,7 @@ import (
 // 稳定身份（一经发布即为机器契约，破坏性语义变化升 @2，不得原地改 @1）。
 const (
 	pluginID      = "io.github.deliciousbuding.cloud-path-driver-stcb"
-	pluginVersion = "0.2.6"
+	pluginVersion = "0.2.7"
 
 	// driverID 是 Describe 上报的稳定 driver 标识，与 plugin.yaml contributes.drivers[0].id 一致。
 	driverID = "stcb"
@@ -150,7 +150,7 @@ var displayActionSchema = map[string]any{
 			"type": "array", "items": map[string]any{"type": "integer", "minimum": 0, "maximum": 25},
 			"minItems": 8, "maxItems": 8, "title": "8 位字形码（0-25：数字/空白/横线/H/L/小数点数字）",
 		},
-		"mode": map[string]any{"type": "string", "enum": []any{"clock"}, "title": "恢复 HH-MM-SS 实时时钟"},
+		"mode": map[string]any{"type": "string", "enum": []any{"clock", "date", "sensors", "io", "version"}, "title": "切换板端信息页"},
 	},
 	"oneOf": []any{
 		map[string]any{"required": []any{"digits"}},
@@ -180,7 +180,7 @@ func capabilityDescriptors() []driver.CapabilityDescriptor {
 		{ID: capKey, Title: "按键", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "integer", Access: "read"}}, Events: []driver.EventDescriptor{{Name: "pressed", PayloadSchemaJSON: "{}"}, {Name: "released", PayloadSchemaJSON: "{}"}}},
 		{ID: capBuzzer, Title: "蜂鸣器", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "string", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionBuzzer, Title: "播放提示音", Description: "按频率档和时长档播放，完成后返回设备回执。", InputSchemaJSON: mustJSON(buzzerActionSchema)}, {Name: actionTone, Title: "播放原始音调", Description: "按 1-4000 Hz 频率和 10-1200 ms 时长播放，完成后返回设备回执。", InputSchemaJSON: mustJSON(toneActionSchema)}, {Name: actionToneSequence, Title: "播放音序", Description: "一次提交 1-64 个音符；Driver 本地按序执行，内置曲目走固件原生音序器。", InputSchemaJSON: mustJSON(toneSequenceActionSchema)}}},
 		{ID: capLED, Title: "LED 灯组", Properties: []driver.PropertyDescriptor{{Name: "mask", Type: "integer", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionLED, Title: "设置指示灯", Description: "mask 与 pattern 二选一；mask 的每一位对应 L0–L7。", InputSchemaJSON: mustJSON(ledActionSchema)}}},
-		{ID: capDisplay, Title: "数码管", Properties: []driver.PropertyDescriptor{{Name: "mode", Type: "string", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionDisplay, Title: "设置数码管", Description: "digits、codes、mode 三选一；mode 为 clock 时恢复时钟。", InputSchemaJSON: mustJSON(displayActionSchema)}}},
+		{ID: capDisplay, Title: "数码管", Properties: []driver.PropertyDescriptor{{Name: "mode", Type: "string", Access: "read"}, {Name: "page", Type: "string", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionDisplay, Title: "设置数码管", Description: "digits、codes、mode 三选一；mode 可切换 clock/date/sensors/io/version 信息页。", InputSchemaJSON: mustJSON(displayActionSchema)}}},
 		{ID: capMotor, Title: "步进电机接口", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "string", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionMotor, Title: "控制步进电机", Description: "steps 为步数档；0 停止，1–4 对应 50–200 步。", InputSchemaJSON: mustJSON(motorActionSchema)}}},
 		{ID: capDiag, Title: "板级诊断", Actions: []driver.ActionDescriptor{{Name: "diag", Title: "读取板级诊断", Description: "读取原始端口与输入状态，不驱动执行器。", InputSchemaJSON: "{}"}}},
 	}
@@ -723,6 +723,9 @@ func (d *Driver) emitObservations(send func(deviceID string, union driver.Driver
 		obs("buzzer", capBuzzer, "state", str(full.Beep), at)
 		obs("led-bank", capLED, "mask", integer(full.LED), at)
 		obs("display", capDisplay, "mode", str(full.Display), at)
+		if full.Page != "" {
+			obs("display", capDisplay, "page", str(full.Page), at)
+		}
 		obs("motor", capMotor, "state", str(full.Motor), at)
 		return
 	}

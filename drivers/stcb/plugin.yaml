@@ -9,7 +9,7 @@
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Driver
 id: io.github.deliciousbuding.cloud-path-driver-stcb
-version: 0.2.6
+version: 0.2.7
 protocol: 1
 entrypoint: cloudpath-driver-stcb
 compatibility:

@@ -15,7 +15,7 @@ type FullState struct {
 	Temp, Light, Nav, Ext0, Ext1 int
 	Hall, Vib, Key1, Key2, Key3  int
 	NavKey                       int
-	Motor, Beep, Display         string
+	Motor, Beep, Display, Page   string
 	LED                          int
 	Raw                          string
 }
@@ -96,7 +96,7 @@ func ParseFullState(line string) (FullState, bool) {
 	if e4 != nil || e5 != nil || e6 != nil || e7 != nil || e8 != nil || e9 != nil || e10 != nil || e11 != nil || e12 != nil || e13 != nil || e14 != nil {
 		return FullState{}, false
 	}
-	return FullState{Clock: clock, Hour: hour, Min: min, Sec: sec, Temp: temp, Light: light, Nav: nav, Ext0: ext0, Ext1: ext1, Hall: hall, Vib: vib, Key1: k1, Key2: k2, Key3: k3, NavKey: navKey, Motor: kv["motor"], Beep: kv["beep"], Display: kv["display"], LED: parseHexByte(kv["led"]), Raw: line}, true
+	return FullState{Clock: clock, Hour: hour, Min: min, Sec: sec, Temp: temp, Light: light, Nav: nav, Ext0: ext0, Ext1: ext1, Hall: hall, Vib: vib, Key1: k1, Key2: k2, Key3: k3, NavKey: navKey, Motor: kv["motor"], Beep: kv["beep"], Display: kv["display"], Page: kv["page"], LED: parseHexByte(kv["led"]), Raw: line}, true
 }
 
 // ParseDeviceAck parses ACK:<id>:ok and ERR:<id>:<code>.
@@ -236,8 +236,13 @@ func encodeV1Command(id, action, argsJSON string) ([]byte, error) {
 		if err := json.Unmarshal([]byte(argsJSON), &x); err != nil {
 			return nil, fmt.Errorf("stcb: display args: %w", err)
 		}
-		if x.Mode == "clock" {
-			args = "mode=clock"
+		if x.Mode != "" {
+			switch x.Mode {
+			case "clock", "date", "sensors", "io", "version":
+				args = "mode=" + x.Mode
+			default:
+				return nil, fmt.Errorf("stcb: display mode must be clock/date/sensors/io/version")
+			}
 			break
 		}
 		if len(x.Codes) > 0 {
