@@ -1,7 +1,7 @@
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Application
 id: io.github.deliciousbuding.cloud-path-app-scheduled-compartment
-version: 0.2.6
+version: 0.2.7
 protocol: 1
 # Executable entrypoint. The Application Protocol v1 service is implemented in
 # cmd/cloud-path-app-scheduled-compartment and served over the host transport.
@@ -40,11 +40,14 @@ contributes:
             title: 药盒提醒
             sections:
               - type: status
-              - type: metrics
                 source: instance
+              - type: metrics
+                source: records
+                recordType: window
               - type: actions
                 source: manual-jobs
               - type: records
+                source: records
                 recordType: window
                 presentation: timeline
               - type: schedule
@@ -52,3 +55,24 @@ contributes:
                 recordType: window
               - type: form
                 source: config
+                fields:
+                  - key: app_config.timezone
+                    label: 时区
+                    type: string
+                    description: 按 IANA 时区名称填写，例如 Asia/Shanghai。
+                    placeholder: Asia/Shanghai
+                    required: true
+                  - key: app_config.reminder.freq
+                    label: 提醒音档位
+                    type: integer
+                    description: 0 为静音；1–9 为蜂鸣器频率档。
+                    minimum: 0
+                    maximum: 9
+                    default: 0
+                  - key: app_config.reminder.duration
+                    label: 提醒时长档位
+                    type: integer
+                    description: 0 为不发声；1–9 为蜂鸣器时长档。
+                    minimum: 0
+                    maximum: 9
+                    default: 0

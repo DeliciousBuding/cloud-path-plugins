@@ -2,7 +2,7 @@
 
 把一个或多个按键变成**取药确认**输入：按每日计划或管理台操作开启提醒窗口，记录按时确认、到期未确认、迟到确认，以及提醒命令的实际回执。
 
-**版本 0.2.6；需要 Core >=0.2.15 且 <0.3.0，公开 Go SDK v0.2.15。** 两个用户操作依赖 `JobDescriptor.ManualOnly`，不能放到不识别该字段的旧 Core 上运行，否则旧的分钟调度器可能把用户操作当自动任务。
+**版本 0.2.7；需要 Core >=0.2.15 且 <0.3.0，公开 Go SDK v0.2.15。** 两个用户操作依赖 `JobDescriptor.ManualOnly`，不能放到不识别该字段的旧 Core 上运行，否则旧的分钟调度器可能把用户操作当自动任务。
 
 状态：`IMPLEMENTED`。仓库测试覆盖内存协议、业务状态机和失败边界；不代表管理台 HTTP、真实设备或现场验收已经通过。应用不直接打开设备、串口或网络连接，只通过公开 SDK 请求已绑定的 Capability。
 
@@ -10,7 +10,7 @@
 
 ## WebUI 贡献
 
-`plugin.yaml` 声明 `ui.apiVersion: 1`，Core 会为已启用的药盒实例生成导航“药盒提醒”和独立路由 `/apps/pillbox`。页面由通用 section 组成：实例状态、指标、手动操作、`window` 记录时间线、计划和配置表单；`start-reminder`、`confirm-window` 只作为手动动作展示。页面不把裸 `app_config` 作为主界面，旧的 `app_config` / `app_bindings` 配置继续兼容，原始参数只在高级详情中出现。
+`plugin.yaml` 声明 `ui.apiVersion: 1`，Core 会为已启用的药盒实例生成导航“药盒提醒”和独立路由 `/apps/pillbox`。页面由通用 section 组成：实例状态、来自 `window` 记录的指标、手动操作、`window` 记录时间线、计划和配置表单；`start-reminder`、`confirm-window` 只作为手动动作展示。表单覆盖时区和提醒音档位；药格/日程数组与显示参数仍保留在高级详情。
 
 ## 1. 选择按键和配置
 
