@@ -114,6 +114,28 @@ func parseRequirementBlocks(t *testing.T, file, content string) []manifestRequir
 	return out
 }
 
+func TestManifestUIContribution(t *testing.T) {
+	m := strings.ReplaceAll(repoFile(t, "plugin.yaml"), "\r\n", "\n")
+	for _, want := range []string{
+		"      ui:\n        apiVersion: 1",
+		"        navigation:\n          title: 药盒提醒\n          icon: pill\n          order: 30\n          route: pillbox\n          visibility: instance-enabled",
+		"        pages:\n          - id: home\n            title: 药盒提醒",
+		"              - type: status",
+		"              - type: metrics\n                source: instance",
+		"              - type: actions\n                source: manual-jobs",
+		"              - type: records\n                recordType: window\n                presentation: timeline",
+		"              - type: schedule\n                source: records\n                recordType: window",
+		"              - type: form\n                source: config",
+	} {
+		if !strings.Contains(m, want) {
+			t.Fatalf("plugin.yaml missing UI contract %q", want)
+		}
+	}
+	if strings.Contains(m, "type: custom") {
+		t.Fatal("scheduled-compartment must use declarative sections, not arbitrary custom UI")
+	}
+}
+
 // TestManifestRequirementsMirror pins the three source-of-truth copies
 // together: plugin.yaml, requirements.yaml and the ApplicationDescriptor
 // returned by Describe. A change in one without the others fails here instead

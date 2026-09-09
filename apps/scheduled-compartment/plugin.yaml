@@ -1,7 +1,7 @@
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Application
 id: io.github.deliciousbuding.cloud-path-app-scheduled-compartment
-version: 0.2.5
+version: 0.2.6
 protocol: 1
 # Executable entrypoint. The Application Protocol v1 service is implemented in
 # cmd/cloud-path-app-scheduled-compartment and served over the host transport.
@@ -27,3 +27,28 @@ contributes:
   applications:
     - id: scheduled-compartment
       title: 取药提醒
+      ui:
+        apiVersion: 1
+        navigation:
+          title: 药盒提醒
+          icon: pill
+          order: 30
+          route: pillbox
+          visibility: instance-enabled
+        pages:
+          - id: home
+            title: 药盒提醒
+            sections:
+              - type: status
+              - type: metrics
+                source: instance
+              - type: actions
+                source: manual-jobs
+              - type: records
+                recordType: window
+                presentation: timeline
+              - type: schedule
+                source: records
+                recordType: window
+              - type: form
+                source: config

@@ -267,7 +267,7 @@ func TestDescriptorRequirements(t *testing.T) {
 	if desc.ApplicationID != "io.github.deliciousbuding.cloud-path-app-scheduled-compartment" {
 		t.Fatalf("application id = %q", desc.ApplicationID)
 	}
-	if desc.Version != "0.2.5" {
+	if desc.Version != pluginVersion {
 		t.Fatalf("version = %q", desc.Version)
 	}
 	if desc.DeclarativeOnly {
