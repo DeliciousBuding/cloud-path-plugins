@@ -2,7 +2,7 @@
   "apiVersion": "plugins.cloudpath.dev/v1alpha1",
   "kind": "Application",
   "id": "io.github.deliciousbuding.cloud-path-app-sensor-alert",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "protocol": 1,
   "entrypoint": "cloud-path-app-sensor-alert",
   "compatibility": {
@@ -58,7 +58,7 @@
             "icon": "bell-ring",
             "order": 40,
             "route": "sensor-alert",
-            "visibility": "instance-enabled"
+            "visibility": "always"
           },
           "pages": [
             {
