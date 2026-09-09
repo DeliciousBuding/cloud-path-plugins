@@ -1,7 +1,7 @@
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Application
 id: io.github.deliciousbuding.cloud-path-app-button-indicator
-version: 0.1.5
+version: 0.1.6
 protocol: 1
 # Executable entrypoint. The Application Protocol v1 service is implemented in
 # cmd/cloud-path-app-button-indicator and served over the host transport.
@@ -43,12 +43,39 @@ contributes:
             title: 工位呼叫
             sections:
               - type: status
-              - type: metrics
                 source: instance
+              - type: metrics
+                source: records
+                recordType: service_call
               - type: actions
                 source: manual-jobs
               - type: records
+                source: records
                 recordType: service_call
                 presentation: timeline
               - type: form
                 source: config
+                fields:
+                  - key: app_config.mode
+                    label: 工作模式
+                    type: select
+                    description: 走路灯为默认模式；工位呼叫用于请求和确认。
+                    enum: [walking-light, service-call]
+                    default: walking-light
+                  - key: app_config.timezone
+                    label: 时区
+                    type: string
+                    description: 按 IANA 时区名称填写，例如 Asia/Shanghai。
+                    placeholder: Asia/Shanghai
+                    default: UTC
+                  - key: app_config.heartbeat_cron
+                    label: 心跳检查周期
+                    type: string
+                    description: 5 段 cron 表达式，按上面的时区解释。
+                    placeholder: "*/5 * * * *"
+                    default: "*/5 * * * *"
+                  - key: app_config.beep_on_press
+                    label: 按下时蜂鸣
+                    type: boolean
+                    description: 开启后新按键或新呼叫会短鸣一次；默认关闭。
+                    default: false

@@ -77,11 +77,15 @@ func TestManifestUIContribution(t *testing.T) {
 		"      ui:\n        apiVersion: 1",
 		"        navigation:\n          title: 工位呼叫\n          icon: bell\n          order: 50\n          route: service-desk\n          visibility: instance-enabled",
 		"        pages:\n          - id: home\n            title: 工位呼叫",
-		"              - type: status",
-		"              - type: metrics\n                source: instance",
+		"              - type: status\n                source: instance",
+		"              - type: metrics\n                source: records\n                recordType: service_call",
 		"              - type: actions\n                source: manual-jobs",
-		"              - type: records\n                recordType: service_call\n                presentation: timeline",
-		"              - type: form\n                source: config",
+		"              - type: records\n                source: records\n                recordType: service_call\n                presentation: timeline",
+		"              - type: form\n                source: config\n                fields:",
+		"                  - key: app_config.mode",
+		"                  - key: app_config.timezone",
+		"                  - key: app_config.heartbeat_cron",
+		"                  - key: app_config.beep_on_press",
 	} {
 		if !strings.Contains(m, want) {
 			t.Fatalf("plugin.yaml missing UI contract %q", want)
