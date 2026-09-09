@@ -1,7 +1,7 @@
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Application
 id: io.github.deliciousbuding.cloud-path-app-hall-pillbox
-version: 0.1.6
+version: 0.1.7
 protocol: 1
 entrypoint: cloud-path-app-hall-pillbox
 compatibility:
@@ -71,11 +71,10 @@ contributes:
                     format: time
                     hideWhenEmpty: true
               - type: schedule
+                source: jobs
                 title: 自动提醒计划
                 description: 按设定时间自动开启提醒；提醒后请打开药盒完成确认。
                 emptyText: 暂无自动提醒计划。
-                source: records
-                recordType: window
               - type: actions
                 title: 手动操作
                 description: 需要立即测试时，可以在这里手动开启提醒或确认记录。
@@ -112,7 +111,7 @@ contributes:
                     hideWhenEmpty: true
               - type: form
                 title: 提醒设置
-                description: 设置药盒所在时区、药格名称和提醒声音。
+                description: 配置药盒所在时区、药格标识、每日提醒计划和提醒声音。
                 emptyText: 暂无可配置的提醒设置。
                 source: config
                 fields:
@@ -123,11 +122,43 @@ contributes:
                     placeholder: Asia/Shanghai
                     required: true
                   - key: app_config.compartment
-                    label: 药格名称
+                    label: 药格标识
                     type: string
-                    description: 给这个药格起一个容易识别的名字，例如 medicine。
+                    description: 必填；1–128 个 UTF-8 字节，不能有首尾空白，例如 medicine。它是应用自己的逻辑标识，不是 Driver、串口或按键实体 ID。
                     placeholder: medicine
                     required: true
+                  - key: app_config.schedule
+                    label: 每日提醒计划
+                    type: array
+                    description: 至少添加一个窗口；开始和结束时间使用 24 小时制 HH:MM，按药盒所在时区解释。
+                    required: true
+                    minItems: 1
+                    itemFields:
+                      - key: id
+                        label: 计划 ID
+                        type: string
+                        description: 每个窗口的唯一标识，例如 morning。
+                        placeholder: morning
+                        required: true
+                      - key: compartment
+                        label: 药格标识（可选）
+                        type: string
+                        description: 可留空；留空时使用上方“药格标识”，填写时必须完全一致。
+                        placeholder: medicine
+                      - key: start
+                        label: 开始时间
+                        type: string
+                        description: 24 小时制 HH:MM，例如 08:00。
+                        placeholder: "08:00"
+                        required: true
+                        pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+                      - key: end
+                        label: 结束时间
+                        type: string
+                        description: 24 小时制 HH:MM，必须晚于开始时间；不支持跨午夜。
+                        placeholder: "08:30"
+                        required: true
+                        pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
                   - key: app_config.reminder.freq
                     label: 提醒音档位
                     type: integer
