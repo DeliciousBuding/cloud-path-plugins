@@ -29,21 +29,121 @@ UI = {
         "icon": "leaf",
         "order": 30,
         "route": "environment",
-        "visibility": "instance-enabled",
+        "visibility": "instance-enabled"
     },
-    "pages": [{
-        "id": "home",
-        "title": "环境监测",
-        "sections": [
-            {"type": "status", "source": "instance"},
-            {"type": "metrics", "source": "instance"},
-            {"type": "actions", "source": "manual-jobs"},
-            {"type": "records", "source": "records", "recordType": "alert", "presentation": "timeline"},
-            {"type": "form", "source": "config"},
-        ],
-    }],
+    "pages": [
+        {
+            "id": "home",
+            "title": "环境监测",
+            "sections": [
+                {
+                    "type": "status",
+                    "source": "instance"
+                },
+                {
+                    "type": "metrics",
+                    "source": "records",
+                    "recordType": "environment"
+                },
+                {
+                    "type": "actions",
+                    "source": "manual-jobs"
+                },
+                {
+                    "type": "records",
+                    "source": "records",
+                    "recordType": "alert",
+                    "presentation": "timeline"
+                },
+                {
+                    "type": "form",
+                    "source": "config",
+                    "fields": [
+                        {
+                            "key": "app_config.timezone",
+                            "label": "时区",
+                            "type": "string",
+                            "description": "UTC 或明确的 IANA 时区名称；不要使用 Local。",
+                            "placeholder": "Asia/Shanghai",
+                            "default": "UTC"
+                        },
+                        {
+                            "key": "app_config.temperature_min",
+                            "label": "温度下限",
+                            "type": "number",
+                            "description": "原始温度读数的下限，必须小于温度上限。",
+                            "default": 18
+                        },
+                        {
+                            "key": "app_config.temperature_max",
+                            "label": "温度上限",
+                            "type": "number",
+                            "description": "原始温度读数的上限，必须大于温度下限。",
+                            "default": 28
+                        },
+                        {
+                            "key": "app_config.light_threshold",
+                            "label": "光照阈值",
+                            "type": "number",
+                            "description": "留空表示关闭光照阈值，仅显示原始读数。",
+                            "placeholder": "例如 300"
+                        },
+                        {
+                            "key": "app_config.light_alert_when",
+                            "label": "光照告警方向",
+                            "type": "select",
+                            "description": "仅表示数值比较方向，不代表物理明暗已标定。",
+                            "enum": [
+                                "below",
+                                "above"
+                            ],
+                            "default": "below"
+                        },
+                        {
+                            "key": "app_config.hysteresis.temperature",
+                            "label": "温度回差",
+                            "type": "number",
+                            "description": "恢复区间宽度；必须小于温度上下限差的一半。",
+                            "minimum": 0,
+                            "default": 1
+                        },
+                        {
+                            "key": "app_config.hysteresis.light",
+                            "label": "光照回差",
+                            "type": "number",
+                            "description": "与光照原始读数同单位。",
+                            "minimum": 0,
+                            "default": 5
+                        },
+                        {
+                            "key": "app_config.stale_after_s",
+                            "label": "过期时间（秒）",
+                            "type": "integer",
+                            "description": "超过该时间没有新观测时标记为过期。",
+                            "minimum": 60,
+                            "maximum": 86400,
+                            "default": 120
+                        },
+                        {
+                            "key": "app_config.temperature_unit",
+                            "label": "温度单位",
+                            "type": "string",
+                            "description": "可选；缺失单位时的回退值，不做换算。",
+                            "placeholder": "例如 C"
+                        },
+                        {
+                            "key": "app_config.light_unit",
+                            "label": "光照单位",
+                            "type": "string",
+                            "description": "可选；缺失单位时的回退值，不做换算。",
+                            "placeholder": "例如 lux"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
 }
-
 
 def unique_object(pairs):
     result = {}
@@ -63,7 +163,7 @@ def parse(text):
 def validate(value):
     expected = {
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
-        "kind": "Application", "id": PLUGIN_ID, "version": "0.1.1",
+        "kind": "Application", "id": PLUGIN_ID, "version": "0.1.2",
         "protocol": 1, "entrypoint": ENTRYPOINT,
         "compatibility": {"core": ">=0.2.15 <0.3.0"},
         "permissions": {"hardware": [], "network": [], "filesystem": [], "secrets": []},
