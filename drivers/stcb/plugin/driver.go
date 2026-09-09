@@ -18,7 +18,7 @@ import (
 // 稳定身份（一经发布即为机器契约，破坏性语义变化升 @2，不得原地改 @1）。
 const (
 	pluginID      = "io.github.deliciousbuding.cloud-path-driver-stcb"
-	pluginVersion = "0.2.4"
+	pluginVersion = "0.2.5"
 
 	// driverID 是 Describe 上报的稳定 driver 标识，与 plugin.yaml contributes.drivers[0].id 一致。
 	driverID = "stcb"
@@ -107,6 +107,29 @@ var toneActionSchema = map[string]any{
 	"required": []any{"frequency_hz", "duration_ms"},
 }
 
+var toneSequenceActionSchema = map[string]any{
+	"type":                 "object",
+	"additionalProperties": false,
+	"properties": map[string]any{
+		"notes": map[string]any{
+			"type":     "array",
+			"minItems": 1,
+			"maxItems": maxToneSequenceNotes,
+			"items": map[string]any{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]any{
+					"frequency_hz": map[string]any{"type": "integer", "minimum": 1, "maximum": 4000},
+					"duration_ms":  map[string]any{"type": "integer", "minimum": 10, "maximum": 1200, "multipleOf": 10},
+				},
+				"required": []any{"frequency_hz", "duration_ms"},
+			},
+		},
+		"gap_ms": map[string]any{"type": "integer", "minimum": 0, "maximum": maxSequenceGapMS, "multipleOf": 10, "default": 0, "title": "音符间隔 (ms)"},
+	},
+	"required": []any{"notes"},
+}
+
 var ledActionSchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
@@ -155,7 +178,7 @@ func capabilityDescriptors() []driver.CapabilityDescriptor {
 		{ID: capHall, Title: "磁场检测", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "integer", Access: "read"}}, Events: []driver.EventDescriptor{{Name: "changed", PayloadSchemaJSON: "{}"}}},
 		{ID: capVib, Title: "振动检测", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "integer", Access: "read"}}, Events: []driver.EventDescriptor{{Name: "quake", PayloadSchemaJSON: "{}"}}},
 		{ID: capKey, Title: "按键", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "integer", Access: "read"}}, Events: []driver.EventDescriptor{{Name: "pressed", PayloadSchemaJSON: "{}"}, {Name: "released", PayloadSchemaJSON: "{}"}}},
-		{ID: capBuzzer, Title: "蜂鸣器", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "string", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionBuzzer, Title: "播放提示音", Description: "按频率档和时长档播放，完成后返回设备回执。", InputSchemaJSON: mustJSON(buzzerActionSchema)}, {Name: actionTone, Title: "播放原始音调", Description: "按 1-4000 Hz 频率和 10-1200 ms 时长播放，完成后返回设备回执。", InputSchemaJSON: mustJSON(toneActionSchema)}}},
+		{ID: capBuzzer, Title: "蜂鸣器", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "string", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionBuzzer, Title: "播放提示音", Description: "按频率档和时长档播放，完成后返回设备回执。", InputSchemaJSON: mustJSON(buzzerActionSchema)}, {Name: actionTone, Title: "播放原始音调", Description: "按 1-4000 Hz 频率和 10-1200 ms 时长播放，完成后返回设备回执。", InputSchemaJSON: mustJSON(toneActionSchema)}, {Name: actionToneSequence, Title: "播放音序", Description: "一次提交 1-64 个音符；Driver 本地按序执行，内置曲目走固件原生音序器。", InputSchemaJSON: mustJSON(toneSequenceActionSchema)}}},
 		{ID: capLED, Title: "LED 灯组", Properties: []driver.PropertyDescriptor{{Name: "mask", Type: "integer", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionLED, Title: "设置指示灯", Description: "mask 与 pattern 二选一；mask 的每一位对应 L0–L7。", InputSchemaJSON: mustJSON(ledActionSchema)}}},
 		{ID: capDisplay, Title: "数码管", Properties: []driver.PropertyDescriptor{{Name: "mode", Type: "string", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionDisplay, Title: "设置数码管", Description: "digits、codes、mode 三选一；mode 为 clock 时恢复时钟。", InputSchemaJSON: mustJSON(displayActionSchema)}}},
 		{ID: capMotor, Title: "步进电机接口", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "string", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionMotor, Title: "控制步进电机", Description: "steps 为步数档；0 停止，1–4 对应 50–200 步。", InputSchemaJSON: mustJSON(motorActionSchema)}}},
@@ -797,12 +820,16 @@ func (d *Driver) Execute(ctx context.Context, req *driver.ExecuteRequest) (*driv
 		CommandID: cmdID, IdempotencyKey: req.IdempotencyKey, EntityID: req.EntityID,
 		Action: req.Action, State: driver.CommandStateSucceeded, Progress: 1, Detail: detail,
 	})
+	acceptedFor := 15 * time.Second
+	if req.Action == actionToneSequence {
+		acceptedFor = 60 * time.Second
+	}
 	return &driver.ExecuteResponse{
 		CommandID:        cmdID,
 		IdempotencyKey:   req.IdempotencyKey,
 		Status:           status.New(),
 		State:            driver.CommandStateSucceeded,
-		AcceptedDeadline: time.Now().Add(15 * time.Second).UTC().Format(time.RFC3339),
+		AcceptedDeadline: time.Now().Add(acceptedFor).UTC().Format(time.RFC3339),
 	}, nil
 }
 

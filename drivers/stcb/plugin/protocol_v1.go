@@ -304,6 +304,15 @@ func encodeV1Command(id, action, argsJSON string) ([]byte, error) {
 		if args == "" {
 			args = "time=" + BeijingNow().Add(3*time.Second).Format("150405")
 		}
+	case actionSong:
+		a, err := parseNativeSongArgs(argsJSON)
+		if err != nil {
+			return nil, err
+		}
+		verb = "song"
+		args = "name=" + a.Song
+	case actionToneSequence:
+		return nil, fmt.Errorf("stcb: tone-sequence is expanded by the device layer")
 	case "diag":
 		verb = "diag"
 	default:

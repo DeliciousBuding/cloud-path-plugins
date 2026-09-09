@@ -8,32 +8,35 @@ import (
 
 // 执行器命令 key（Capability action 键 == 命令白名单命令名）。
 const (
-	actionBuzzer  = "buzzer"
-	actionTone    = "tone"
-	actionLED     = "led"
-	actionDisplay = "display"
-	actionMotor   = "motor"
-	actionSensor  = "sensor"
-	actionSync    = "sync"
-	actionISP     = "isp"
-	actionRaw     = "raw"
-	actionDiag    = "diag"
+	actionBuzzer       = "buzzer"
+	actionTone         = "tone"
+	actionToneSequence = "tone-sequence"
+	actionSong         = "song" // internal wire-only fast path; not an exposed action
+	actionLED          = "led"
+	actionDisplay      = "display"
+	actionMotor        = "motor"
+	actionSensor       = "sensor"
+	actionSync         = "sync"
+	actionISP          = "isp"
+	actionRaw          = "raw"
+	actionDiag         = "diag"
 )
 
 // supportedActions 是 Execute 支持的全部 action 白名单（唯一事实源）。
 var supportedActions = []string{
-	actionBuzzer, actionTone, actionLED, actionDisplay, actionMotor,
+	actionBuzzer, actionTone, actionToneSequence, actionLED, actionDisplay, actionMotor,
 	actionSensor, actionSync, actionDiag, actionISP, actionRaw,
 }
 
 // slowActions 是需要逐字节慢发的命令：固件 UART 命令缓冲仅 1 字节，快发会丢字节。
 var slowActions = map[string]bool{
-	actionSync:    true,
-	actionBuzzer:  true,
-	actionTone:    true,
-	actionLED:     true,
-	actionDisplay: true,
-	actionMotor:   true,
+	actionSync:         true,
+	actionBuzzer:       true,
+	actionTone:         true,
+	actionToneSequence: true,
+	actionLED:          true,
+	actionDisplay:      true,
+	actionMotor:        true,
 }
 
 // encodeCommand 把 action + argsJSON 编码为线协议字节帧。
@@ -52,6 +55,8 @@ func encodeCommand(action, argsJSON string) ([]byte, error) {
 		return nil, fmt.Errorf("stcb: diag 需要 Protocol v1 固件（CMD:<id>:diag）")
 	case actionTone:
 		return nil, fmt.Errorf("stcb: tone requires Protocol v1 firmware (CMD:<id>:beep)")
+	case actionToneSequence:
+		return nil, fmt.Errorf("stcb: tone-sequence requires Protocol v1 firmware and is expanded by the device layer")
 	case actionBuzzer:
 		return encodeBuzzer(argsJSON)
 	case actionLED:
@@ -78,6 +83,12 @@ func validateActionArgs(action, argsJSON string) error {
 		required = []string{"freq", "duration"}
 	case actionTone:
 		required = []string{"frequency_hz", "duration_ms"}
+	case actionToneSequence:
+		_, err := parseToneSequenceArgs(argsJSON)
+		return err
+	case actionSong:
+		_, err := parseNativeSongArgs(argsJSON)
+		return err
 	case actionMotor:
 		required = []string{"steps"}
 	case actionLED:

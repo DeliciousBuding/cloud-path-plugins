@@ -17,6 +17,7 @@ const (
 	legacyFrameWindow  = 800 * time.Millisecond
 	legacySyncWindow   = 1200 * time.Millisecond
 	frameWaitPollDelay = 20 * time.Millisecond
+	writeByteDelay     = 5 * time.Millisecond
 )
 
 // deviceConfig 是打开一台 STC-B 设备的参数（来自插件实例配置）。
@@ -247,7 +248,8 @@ func (d *device) write(b []byte) error {
 	return nil
 }
 
-// writeSlow 逐字节慢发：固件 UART 命令缓冲仅 1 字节，快发会丢。
+// writeSlow 逐字节节流：固件 UART 命令缓冲仅 1 字节；5ms 已远大于 115200 下单字节时间，
+// 同时把旧 80ms/byte 的串口写入开销降下来。
 func (d *device) writeSlow(ctx context.Context, b []byte) error {
 	for _, ch := range b {
 		if err := d.write([]byte{ch}); err != nil {
@@ -258,7 +260,7 @@ func (d *device) writeSlow(ctx context.Context, b []byte) error {
 			return ctx.Err()
 		case <-d.done:
 			return fmt.Errorf("stcb: port dead during command")
-		case <-time.After(80 * time.Millisecond):
+		case <-time.After(writeByteDelay):
 		}
 	}
 	return nil
@@ -270,6 +272,10 @@ func (d *device) writeSlow(ctx context.Context, b []byte) error {
 func (d *device) sendV1Command(ctx context.Context, id, action, argsJSON string) (string, error) {
 	d.cmdMu.Lock()
 	defer d.cmdMu.Unlock()
+	return d.sendV1CommandLocked(ctx, id, action, argsJSON, defaultV1ACKTimeout)
+}
+
+func (d *device) sendV1CommandLocked(ctx context.Context, id, action, argsJSON string, timeout time.Duration) (string, error) {
 	wireID := id
 	if len(wireID) > 11 {
 		wireID = wireID[:11]
@@ -286,7 +292,7 @@ func (d *device) sendV1Command(ctx context.Context, id, action, argsJSON string)
 	if err := d.writeSlow(ctx, frame); err != nil {
 		return "", err
 	}
-	timer := time.NewTimer(4 * time.Second)
+	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
 	case <-ctx.Done():
@@ -308,6 +314,9 @@ func (d *device) sendV1Command(ctx context.Context, id, action, argsJSON string)
 // legacy 探针固件（V/B/L/N/T）：没有关联 ACK，只能诚实报告下发与回帧事实。
 func (d *device) sendCommand(ctx context.Context, id, action, argsJSON string) (string, error) {
 	if d.isProtocolV1() {
+		if action == actionToneSequence {
+			return d.sendV1ToneSequence(ctx, id, argsJSON)
+		}
 		return d.sendV1Command(ctx, id, action, argsJSON)
 	}
 	switch action {
