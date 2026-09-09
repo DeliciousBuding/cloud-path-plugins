@@ -4,7 +4,7 @@
 把内置歌曲每轮重复压成一条 `tone-sequence` 命令，把单音压成一条 `tone` 命令，并维护当前 `music_session` 状态。
 它不直接访问串口、浏览器、烧录工具或现网配置，只使用 Core 绑定后提供的实体 ID。
 
-Version **0.2.4**；需要 Core `>=0.2.15 <0.3.0` 和公开 Go SDK v0.2.15。
+Version **0.2.5**；需要 Core `>=0.2.15 <0.3.0` 和公开 Go SDK v0.2.15。
 状态：`IMPLEMENTED`。仓库测试使用 fake event stream / fake effect writer，
 不是真板或现场验收证据。
 
@@ -28,7 +28,7 @@ Manifest 声明 `ui.apiVersion: 1`，安装实例后注册导航“音乐播放�
 
 ## Configuration
 
-版本 0.2.4 没有业务配置字段。`app_config` 必须是空 JSON object：
+版本 0.2.5 没有业务配置字段。`app_config` 必须是空 JSON object：
 
 ```json
 {}
