@@ -1,7 +1,7 @@
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Application
 id: io.github.deliciousbuding.cloud-path-app-button-indicator
-version: 0.1.6
+version: 0.1.7
 protocol: 1
 # Executable entrypoint. The Application Protocol v1 service is implemented in
 # cmd/cloud-path-app-button-indicator and served over the host transport.
@@ -41,41 +41,90 @@ contributes:
         pages:
           - id: home
             title: 工位呼叫
+            description: 需要帮助时发起工位呼叫，处理人员确认后解除提示。
             sections:
               - type: status
+                title: 当前状态
+                description: 查看工位呼叫功能是否正常运行。
+                emptyText: 暂无运行状态。
                 source: instance
               - type: metrics
+                title: 最近一次呼叫
+                description: 查看最近一次呼叫的处理进度和时间。
+                emptyText: 还没有呼叫记录。
                 source: records
                 recordType: service_call
+                fields:
+                  - key: status
+                    label: 当前状态
+                    values:
+                      pending: 等待确认
+                      acknowledged: 已确认
+                  - key: requested_at
+                    label: 请求时间
+                    format: time
+                  - key: acknowledged_at
+                    label: 确认时间
+                    format: time
+                    hideWhenEmpty: true
+                  - key: note
+                    label: 说明
+                    hideWhenEmpty: true
               - type: actions
+                title: 呼叫操作
+                description: 需要帮助时发起呼叫；处理完成后确认并解除提示。
+                emptyText: 当前没有可执行的操作。
                 source: manual-jobs
               - type: records
+                title: 呼叫记录
+                description: 按时间查看每次呼叫和确认情况。
+                emptyText: 还没有呼叫记录。
                 source: records
                 recordType: service_call
-                presentation: timeline
+                presentation: cards
+                fields:
+                  - key: title
+                    label: 呼叫
+                  - key: summary
+                    label: 处理情况
+                  - key: status
+                    label: 状态
+                    values:
+                      pending: 等待确认
+                      acknowledged: 已确认
+                  - key: requested_at
+                    label: 请求时间
+                    format: time
+                  - key: acknowledged_at
+                    label: 确认时间
+                    format: time
+                    hideWhenEmpty: true
               - type: form
+                title: 运行设置
+                description: 设置插件的工作方式、时间和蜂鸣提示。
+                emptyText: 暂无需要调整的设置。
                 source: config
                 fields:
                   - key: app_config.mode
                     label: 工作模式
                     type: select
-                    description: 走路灯为默认模式；工位呼叫用于请求和确认。
+                    description: 选择走路灯时按按键切换灯位；选择工位呼叫时用于发起和确认呼叫。
                     enum: [walking-light, service-call]
                     default: walking-light
                   - key: app_config.timezone
                     label: 时区
                     type: string
-                    description: 按 IANA 时区名称填写，例如 Asia/Shanghai。
+                    description: 用于显示呼叫时间和执行定时检查，例如 Asia/Shanghai。
                     placeholder: Asia/Shanghai
                     default: UTC
                   - key: app_config.heartbeat_cron
-                    label: 心跳检查周期
+                    label: 定时检查
                     type: string
-                    description: 5 段 cron 表达式，按上面的时区解释。
+                    description: 按 5 段格式填写检查时间，例如 */5 * * * * 表示每 5 分钟检查一次。
                     placeholder: "*/5 * * * *"
                     default: "*/5 * * * *"
                   - key: app_config.beep_on_press
-                    label: 按下时蜂鸣
+                    label: 蜂鸣提示
                     type: boolean
-                    description: 开启后新按键或新呼叫会短鸣一次；默认关闭。
+                    description: 打开后，新按键或新呼叫会短鸣一次；默认关闭。
                     default: false
