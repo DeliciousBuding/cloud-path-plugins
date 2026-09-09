@@ -38,94 +38,179 @@ UI = {
         {
             "id": "home",
             "title": "传感器告警",
+            "description": "监测温度、光照、接触和振动，达到设定条件时发出声光提醒，并记录每次告警。",
             "sections": [
                 {
                     "type": "status",
+                    "title": "运行状态",
+                    "description": "查看告警功能是否已经启用，以及设备和平台是否连接正常。",
+                    "emptyText": "暂无运行状态信息。",
                     "source": "instance"
                 },
                 {
                     "type": "metrics",
+                    "title": "当前告警",
+                    "description": "显示最近一次告警的状态、传感器、当前值和触发时间。",
+                    "emptyText": "还没有告警记录。",
                     "source": "records",
-                    "recordType": "alert"
+                    "recordType": "alert",
+                    "fields": [
+                        {
+                            "key": "state",
+                            "label": "告警状态",
+                            "values": {
+                                "armed": "已启用",
+                                "triggered": "已触发",
+                                "recovered": "已恢复",
+                                "disarmed": "已停用"
+                            },
+                            "hideWhenEmpty": True
+                        },
+                        {
+                            "key": "sensor",
+                            "label": "传感器",
+                            "values": {
+                                "temperature": "温度",
+                                "illuminance": "光照",
+                                "contact": "接触",
+                                "vibration": "振动"
+                            },
+                            "hideWhenEmpty": True
+                        },
+                        {
+                            "key": "value",
+                            "label": "当前值",
+                            "format": "number",
+                            "hideWhenEmpty": True
+                        },
+                        {
+                            "key": "triggered_at",
+                            "label": "触发时间",
+                            "format": "time",
+                            "hideWhenEmpty": True
+                        }
+                    ]
                 },
                 {
                     "type": "actions",
+                    "title": "告警开关",
+                    "description": "点击“布防告警”启用告警，点击“撤防告警”停用告警。",
+                    "emptyText": "暂无可执行的告警操作。",
                     "source": "manual-jobs"
                 },
                 {
                     "type": "records",
+                    "title": "告警记录",
+                    "description": "查看每次告警发生在哪个传感器、当时是什么状态、数值和触发阈值。",
+                    "emptyText": "还没有告警记录。",
                     "source": "records",
                     "recordType": "alert",
-                    "presentation": "timeline"
+                    "presentation": "timeline",
+                    "fields": [
+                        {
+                            "key": "sensor",
+                            "label": "传感器",
+                            "values": {
+                                "temperature": "温度",
+                                "illuminance": "光照",
+                                "contact": "接触",
+                                "vibration": "振动"
+                            },
+                            "hideWhenEmpty": True
+                        },
+                        {
+                            "key": "state",
+                            "label": "告警状态",
+                            "values": {
+                                "armed": "已启用",
+                                "triggered": "已触发",
+                                "recovered": "已恢复",
+                                "disarmed": "已停用"
+                            },
+                            "hideWhenEmpty": True
+                        },
+                        {
+                            "key": "value",
+                            "label": "当前值",
+                            "format": "number",
+                            "hideWhenEmpty": True
+                        },
+                        {
+                            "key": "threshold",
+                            "label": "触发阈值",
+                            "format": "number",
+                            "hideWhenEmpty": True
+                        },
+                        {
+                            "key": "triggered_at",
+                            "label": "触发时间",
+                            "format": "time",
+                            "hideWhenEmpty": True
+                        }
+                    ]
                 },
                 {
                     "type": "form",
+                    "title": "告警设置",
+                    "description": "设置触发告警的条件，以及触发后如何提醒。",
+                    "emptyText": "暂无可配置项。",
                     "source": "config",
                     "fields": [
                         {
                             "key": "app_config.temperature_min",
-                            "label": "温度下限",
+                            "label": "最低温度（℃）",
                             "type": "number",
-                            "description": "低于该值触发 temperature-low。",
+                            "description": "低于这个温度时触发告警。",
                             "default": 18
                         },
                         {
                             "key": "app_config.temperature_max",
-                            "label": "温度上限",
+                            "label": "最高温度（℃）",
                             "type": "number",
-                            "description": "高于该值触发 temperature-high。",
+                            "description": "高于这个温度时触发告警。",
                             "default": 28
                         },
                         {
                             "key": "app_config.light_min",
-                            "label": "光照下限",
+                            "label": "最低光照",
                             "type": "number",
-                            "description": "留空表示不评估光照下限。"
+                            "description": "低于这个数值时触发告警；留空表示不检查。"
                         },
                         {
                             "key": "app_config.light_max",
-                            "label": "光照上限",
+                            "label": "最高光照",
                             "type": "number",
-                            "description": "留空表示不评估光照上限。"
+                            "description": "高于这个数值时触发告警；留空表示不检查。"
                         },
                         {
                             "key": "app_config.contact_enabled",
-                            "label": "启用接触告警",
+                            "label": "接触告警",
                             "type": "boolean",
-                            "description": "启用 hall@1 接触事件告警。",
+                            "description": "打开后，门、盖或窗被打开时触发告警。",
                             "default": False
                         },
                         {
                             "key": "app_config.vibration_enabled",
-                            "label": "启用振动告警",
+                            "label": "振动告警",
                             "type": "boolean",
-                            "description": "启用 vibration@1 振动事件告警。",
+                            "description": "打开后，检测到明显振动时触发告警。",
                             "default": False
                         },
                         {
                             "key": "app_config.cooldown_s",
-                            "label": "静默时间（秒）",
+                            "label": "重复提醒间隔（秒）",
                             "type": "integer",
-                            "description": "同一条件触发后的静默秒数；0 表示不抑制重复触发。",
+                            "description": "同一问题再次触发前至少等待多久；填 0 表示不限制。",
                             "minimum": 0,
                             "maximum": 86400,
                             "default": 60
                         },
                         {
                             "key": "app_config.silent",
-                            "label": "静音模式",
+                            "label": "静音提醒",
                             "type": "boolean",
-                            "description": "开启后仅记录并控制灯光，不发送提示音。",
+                            "description": "打开后只亮指示灯，不发出提示音。",
                             "default": False
-                        },
-                        {
-                            "key": "app_config.alert_led_mask",
-                            "label": "告警灯位掩码",
-                            "type": "integer",
-                            "description": "触发时发送给 LED 的 0–255 掩码。",
-                            "minimum": 0,
-                            "maximum": 255,
-                            "default": 255
                         }
                     ]
                 }
@@ -154,7 +239,7 @@ def validate(value):
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
         "kind": "Application",
         "id": PLUGIN_ID,
-        "version": "0.1.3",
+        "version": "0.1.4",
         "protocol": 1,
         "entrypoint": ENTRYPOINT,
         "compatibility": {"core": ">=0.2.15 <0.3.0"},

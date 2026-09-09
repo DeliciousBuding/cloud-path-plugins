@@ -22,7 +22,7 @@ import (
 
 const (
 	pluginID      = "io.github.deliciousbuding.cloud-path-app-sensor-alert"
-	pluginVersion = "0.1.3"
+	pluginVersion = "0.1.4"
 
 	jobArm            = "arm"
 	jobDisarm         = "disarm"
