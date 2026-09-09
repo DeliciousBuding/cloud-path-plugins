@@ -102,8 +102,7 @@ contributes:
                     format: time
                     hideWhenEmpty: true
               - type: schedule
-                # Core's current schedule contract accepts records or an omitted source.
-                # The renderer reads jobs.scheduled, so omitting source avoids a false records claim.
+                source: jobs
                 title: 自动提醒计划
                 description: 查看每天自动提醒取药的时间，以及下一次提醒。
                 emptyText: 还没有设置自动提醒计划。

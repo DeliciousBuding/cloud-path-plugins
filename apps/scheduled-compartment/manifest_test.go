@@ -124,7 +124,7 @@ func TestManifestUIContribution(t *testing.T) {
 		"              - type: metrics\n                source: records\n                recordType: window",
 		"              - type: actions\n                source: manual-jobs",
 		"              - type: records\n                source: records\n                recordType: window\n                presentation: timeline",
-		"              - type: schedule",
+		"              - type: schedule\n                source: jobs",
 		"              - type: form\n                source: config",
 		"                fields:",
 		"                  - key: app_config.compartments",
@@ -159,8 +159,8 @@ func TestManifestUIContribution(t *testing.T) {
 		t.Fatal("schedule/form section boundary missing")
 	}
 	scheduleBlock := m[scheduleStart : scheduleStart+formStart]
-	if strings.Contains(scheduleBlock, "\n                source:") || strings.Contains(scheduleBlock, "\n                recordType:") {
-		t.Fatal("schedule section must omit source/recordType until Core accepts jobs")
+	if !strings.Contains(scheduleBlock, "\n                source: jobs") || strings.Contains(scheduleBlock, "\n                recordType:") {
+		t.Fatal("schedule section must use source: jobs and no recordType")
 	}
 	if strings.Contains(m, "type: custom") {
 		t.Fatal("scheduled-compartment must use declarative sections, not arbitrary custom UI")
