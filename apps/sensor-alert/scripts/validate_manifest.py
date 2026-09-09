@@ -25,6 +25,29 @@ REQUIREMENTS = [
 ]
 
 
+UI = {
+    "apiVersion": 1,
+    "navigation": {
+        "title": "传感器告警",
+        "icon": "bell-ring",
+        "order": 40,
+        "route": "sensor-alert",
+        "visibility": "instance-enabled",
+    },
+    "pages": [{
+        "id": "home",
+        "title": "传感器告警",
+        "sections": [
+            {"type": "status", "source": "instance"},
+            {"type": "metrics", "source": "instance"},
+            {"type": "actions", "source": "manual-jobs"},
+            {"type": "records", "source": "records", "recordType": "alert", "presentation": "timeline"},
+            {"type": "form", "source": "config"},
+        ],
+    }],
+}
+
+
 def unique_object(pairs):
     result = {}
     for key, value in pairs:
@@ -45,7 +68,7 @@ def validate(value):
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
         "kind": "Application",
         "id": PLUGIN_ID,
-        "version": "0.1.1",
+        "version": "0.1.2",
         "protocol": 1,
         "entrypoint": ENTRYPOINT,
         "compatibility": {"core": ">=0.2.15 <0.3.0"},
@@ -69,8 +92,10 @@ def validate(value):
         apps = contributions["applications"]
         if not isinstance(apps, list) or len(apps) != 1 or not isinstance(apps[0], dict):
             errors.append("exactly one application contribution is required")
-        elif set(apps[0]) != {"id", "title"} or apps[0].get("id") != "sensor-alert" or not isinstance(apps[0].get("title"), str) or not apps[0]["title"].strip():
+        elif set(apps[0]) != {"id", "title", "ui"} or apps[0].get("id") != "sensor-alert" or not isinstance(apps[0].get("title"), str) or not apps[0].get("title", "").strip():
             errors.append("application contribution identity/title is invalid")
+        elif apps[0].get("ui") != UI:
+            errors.append("application UI contribution is invalid")
     return errors
 
 
@@ -129,6 +154,9 @@ def self_test(root):
             pass
         else:
             raise AssertionError("accepted malformed/ambiguous JSON")
+    bad_ui = copy.deepcopy(base)
+    bad_ui["contributes"]["applications"][0]["ui"]["navigation"]["route"] = "bad/route"
+    assert validate(bad_ui), "accepted invalid UI route"
     assert list(imports('package sample\nimport "x/internal/y"')) == ["x/internal/y"]
     print("manifest validator self-test OK")
 

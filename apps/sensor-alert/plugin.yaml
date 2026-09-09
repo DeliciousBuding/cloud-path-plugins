@@ -2,7 +2,7 @@
   "apiVersion": "plugins.cloudpath.dev/v1alpha1",
   "kind": "Application",
   "id": "io.github.deliciousbuding.cloud-path-app-sensor-alert",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "protocol": 1,
   "entrypoint": "cloud-path-app-sensor-alert",
   "compatibility": {
@@ -50,7 +50,47 @@
     "applications": [
       {
         "id": "sensor-alert",
-        "title": "通用传感器告警"
+        "title": "通用传感器告警",
+        "ui": {
+          "apiVersion": 1,
+          "navigation": {
+            "title": "传感器告警",
+            "icon": "bell-ring",
+            "order": 40,
+            "route": "sensor-alert",
+            "visibility": "instance-enabled"
+          },
+          "pages": [
+            {
+              "id": "home",
+              "title": "传感器告警",
+              "sections": [
+                {
+                  "type": "status",
+                  "source": "instance"
+                },
+                {
+                  "type": "metrics",
+                  "source": "instance"
+                },
+                {
+                  "type": "actions",
+                  "source": "manual-jobs"
+                },
+                {
+                  "type": "records",
+                  "source": "records",
+                  "recordType": "alert",
+                  "presentation": "timeline"
+                },
+                {
+                  "type": "form",
+                  "source": "config"
+                }
+              ]
+            }
+          ]
+        }
       }
     ]
   }

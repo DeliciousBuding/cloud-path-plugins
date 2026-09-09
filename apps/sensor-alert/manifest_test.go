@@ -29,6 +29,8 @@ type manifestRequirement struct {
 	Cardinality string `json:"cardinality"`
 }
 
+const sensorAlertUIJSON = `{"apiVersion":1,"navigation":{"title":"传感器告警","icon":"bell-ring","order":40,"route":"sensor-alert","visibility":"instance-enabled"},"pages":[{"id":"home","title":"传感器告警","sections":[{"type":"status","source":"instance"},{"type":"metrics","source":"instance"},{"type":"actions","source":"manual-jobs"},{"type":"records","source":"records","recordType":"alert","presentation":"timeline"},{"type":"form","source":"config"}]}]}`
+
 func TestManifestDescriptorAndRequirementMirror(t *testing.T) {
 	var manifest struct {
 		API           string `json:"apiVersion"`
@@ -44,8 +46,9 @@ func TestManifestDescriptorAndRequirementMirror(t *testing.T) {
 		Requirements []manifestRequirement `json:"requirements"`
 		Contributes  struct {
 			Applications []struct {
-				ID    string `json:"id"`
-				Title string `json:"title"`
+				ID    string          `json:"id"`
+				Title string          `json:"title"`
+				UI    json.RawMessage `json:"ui"`
 			} `json:"applications"`
 		} `json:"contributes"`
 	}
@@ -68,6 +71,16 @@ func TestManifestDescriptorAndRequirementMirror(t *testing.T) {
 	}
 	if len(manifest.Contributes.Applications) != 1 || manifest.Contributes.Applications[0].ID != "sensor-alert" || manifest.Contributes.Applications[0].Title == "" {
 		t.Fatal("application contribution missing")
+	}
+	var gotUI, wantUI any
+	if err := json.Unmarshal(manifest.Contributes.Applications[0].UI, &gotUI); err != nil {
+		t.Fatalf("invalid UI contribution: %v", err)
+	}
+	if err := json.Unmarshal([]byte(sensorAlertUIJSON), &wantUI); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(gotUI, wantUI) {
+		t.Fatalf("UI contribution drift: %#v", gotUI)
 	}
 	if len(manifest.Permissions) != 4 {
 		t.Fatal("all permission families must be explicit")
