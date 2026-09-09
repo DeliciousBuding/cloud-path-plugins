@@ -2,7 +2,7 @@
 
 把霍尔开盖传感器和可选 K1 按键变成药盒确认输入：按每日计划或管理台操作启动提醒窗口，记录按时确认、超时未确认和迟到确认，并跟踪蜂鸣器/显示命令的真实回执。
 
-**版本 0.1.0；需要 Core >=0.2.15 且 <0.3.0。** 当前状态是 `IMPLEMENTED`：仓库测试覆盖内存协议、状态机、绑定和 effect 失败边界；不依赖真实板，也不代表真板 Driver、现场无线链路或生产管理台验收已经通过。
+**版本 0.1.1；需要 Core >=0.2.15 且 <0.3.0。** 静音 `0/0` 的 `start-window → display reminder ACK → dashboard confirm → display idle ACK` 已完成生产真板 E2E，状态为 `VERIFIED`；物理磁铁 `opening/close-ignore/away` 序列仍需人工操作，状态为 `PLANNED`。仓库测试另覆盖内存协议、状态机、绑定和 effect 失败边界。
 
 本应用是软件-only Application 插件：不访问 COM3、不启动/停止 Edge、不烧录、不修改现网配置。它只通过公开 SDK 请求已绑定的 Capability。
 
@@ -44,7 +44,7 @@
 - `compartment` 必填，1–128 个 UTF-8 字节，无首尾空白。
 - `schedule` 至少一项；`id` 唯一，`start/end` 必须是 `HH:MM`，`end` 晚于 `start`，不支持跨午夜。
 - `schedule[].compartment` 是可选的扩展字段；当前版本只能为空或等于顶层 `compartment`。
-- `reminder.freq`、`reminder.duration` 为 0–9 的整数。窗口开启时按配置发出 buzzer 命令；确认时发出 `{"freq":0,"duration":0}` 作为停止/静音命令。设备是否接受停止档由 `RequestCompleted` 原样记录，不伪造成功。
+- `reminder.freq`、`reminder.duration` 为 0–9 的整数。`0/0` 是静音约定：窗口开启和确认都不发 buzzer start/stop，`reminder_state` / `reminder_stop_state` 记录为 `suppressed`；可选 display 提示与恢复照常工作。其他取值在窗口开启时按配置发出 buzzer 命令，确认时发出 `{"freq":0,"duration":0}` 作为停止/静音命令。设备是否接受停止档由 `RequestCompleted` 原样记录，不伪造成功。
 - `display` 可选。提供时必须有非空 JSON object 的 `reminder_args` 和 `idle_args`；`missed_args` 可选，省略时超时只更新窗口记录，不发送显示命令。参数属于绑定 Capability 的协议，应用不生成字形或厂商编码。
 - 配置了 `display` 但没有绑定 `local-display` 时，绑定校验会给出 warning；应用不会猜测实体或发送显示命令。
 
@@ -91,8 +91,8 @@ Core 的每日窗口调度会读取配置中的 `schedule` 并发送 `ScheduleTi
 - `hall@1/away`（磁场离开，开盖）和兼容的 `hall@1/open`：绑定到 `opening` 的实体事件，视为霍尔开盖确认，`confirmation_source=hall`。`hall@1/close` 是磁场靠近/关盖，明确忽略，避免刚关盖或噪声边沿误确认。
 - `key@1/press`：仅当 `confirm` 已绑定且实体匹配时作为兜底确认，`confirmation_source=key`。
 - 管理台 `confirm-window`：`confirmation_source=dashboard`。
-- 窗口开启：先写 `window` domain record，再发 buzzer 和可选 display 命令。
-- 确认：写 `completed` / `completed_late` 记录，发 buzzer stop 和可选 display idle 命令。
+- 窗口开启：先写 `window` domain record，再发 buzzer（静音 `0/0` 时跳过）和可选 display 命令。
+- 确认：写 `completed` / `completed_late` 记录，发 buzzer stop（静音 `0/0` 时跳过）和可选 display idle 命令。
 - 超时：写 `missed` 记录，并在配置了 `missed_args` 时发 display missed 命令。
 - 所有 `RequestCommand` 都有稳定幂等键：
   - `buzzer-start:<window_id>`
@@ -122,7 +122,7 @@ gofmt -l .
 python scripts/validate_manifest.py --dir . plugin.yaml
 ```
 
-覆盖点包括：配置与绑定 cardinality、启动副作用和幂等键、霍尔 `away`/兼容 `open` 确认、`close` 忽略及 missed 窗口不被 close 迟到确认、错误 requirement/entity 隔离、K1/管理台确认、missed 与 completed_late、RequestCompleted 回执、重复 check/job 幂等、ScheduleTick 单 compartment 映射，以及 `HandleEvents` 的 fake reader/writer 路径。
+覆盖点包括：配置与绑定 cardinality、启动副作用和幂等键、静音 `0/0` 不产生 buzzer start/stop 且保留 display 提示、霍尔 `away`/兼容 `open` 确认、`close` 忽略及 missed 窗口不被 close 迟到确认、错误 requirement/entity 隔离、K1/管理台确认、missed 与 completed_late、RequestCompleted 回执、重复 check/job 幂等、ScheduleTick 单 compartment 映射，以及 `HandleEvents` 的 fake reader/writer 路径。
 
 ### 7.1 手动真板 E2E（不会自动执行）
 

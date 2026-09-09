@@ -16,7 +16,7 @@ import (
 
 const (
 	pluginIDValue = "io.github.deliciousbuding.cloud-path-app-hall-pillbox"
-	pluginVersion = "0.1.0"
+	pluginVersion = "0.1.1"
 
 	jobStartWindow   = "start-window"
 	jobConfirmWindow = "confirm-window"
@@ -47,6 +47,7 @@ const (
 	windowMissed        = "missed"
 
 	reminderPending      = "pending"
+	reminderSuppressed   = "suppressed"
 	reminderNotRequested = "not_requested"
 	reminderStopped      = "stopped"
 
@@ -596,9 +597,17 @@ func (s *Service) startWindow(st *instanceState, w *windowTrack, now time.Time) 
 
 	w.State = windowOpened
 	w.OpenedAt = now
+	displayEffects := s.reminderDisplayEffects(st, w)
+	if st.config.Reminder != nil && st.config.Reminder.Freq == 0 && st.config.Reminder.Duration == 0 {
+		// Match scheduled-compartment's silent convention: 0/0 suppresses
+		// the buzzer start/stop commands while display reminders continue.
+		w.ReminderState = reminderSuppressed
+		w.ReminderStopState = reminderSuppressed
+		effects := []application.ApplicationEffectUnion{windowRecord(w)}
+		return append(effects, displayEffects...)
+	}
 	w.ReminderState = reminderPending
 	w.ReminderRequestID = reminderStartPrefix + w.ID
-	displayEffects := s.reminderDisplayEffects(st, w)
 	effects := []application.ApplicationEffectUnion{
 		windowRecord(w),
 		&application.RequestCommand{
@@ -628,7 +637,9 @@ func (s *Service) confirmWindowEffects(st *instanceState, w *windowTrack, at tim
 	w.ConfirmationSource = source
 	w.ClosedAt = at
 
-	if w.ReminderEntity != "" && w.ReminderState != reminderNotRequested {
+	if w.ReminderState == reminderSuppressed {
+		w.ReminderStopState = reminderSuppressed
+	} else if w.ReminderEntity != "" && w.ReminderState != reminderNotRequested {
 		w.ReminderStopState = reminderPending
 		w.ReminderStopRequestID = reminderStopPrefix + w.ID
 	}

@@ -262,7 +262,7 @@ func TestDescriptorAndManifestIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if desc.ApplicationID != pluginIDValue || desc.Version != "0.1.0" || desc.DeclarativeOnly {
+	if desc.ApplicationID != pluginIDValue || desc.Version != "0.1.1" || desc.DeclarativeOnly {
 		t.Fatalf("descriptor = %+v", desc)
 	}
 	if len(desc.Requirements) != 4 {
@@ -438,6 +438,64 @@ func TestStartWindowEffectsAndHallOpenConfirmation(t *testing.T) {
 	}
 	if f.window(t, "trial-1").State != windowCompleted {
 		t.Fatal("window did not complete")
+	}
+}
+
+func TestSilentReminderSuppressesBuzzerAndKeepsDisplay(t *testing.T) {
+	f := newFixture(t, true)
+	cfg := testConfig(true)
+	cfg.Reminder = &Reminder{Freq: 0, Duration: 0}
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := f.svc.ConfigureInstance(context.Background(), &application.ConfigureInstanceRequest{
+		PluginInstanceID: testInstance,
+		Config:           raw,
+		ConfigRevision:   2,
+	})
+	if err != nil || resp == nil || !resp.Status.IsOK() {
+		t.Fatalf("configure silent reminder: %+v, %v", resp, err)
+	}
+
+	result := f.mustJob(t, jobStartWindow, `{"window_id":"silent-1","minutes":10}`, "silent-start")
+	if result["state"] != windowOpened || result["reminder_state"] != reminderSuppressed {
+		t.Fatalf("silent start result = %+v", result)
+	}
+	if requestID, ok := result["reminder_request_id"]; ok && fmt.Sprint(requestID) != "" {
+		t.Fatalf("silent reminder requested a buzzer: %+v", result)
+	}
+	startEffects := f.sink.take()
+	assertCommandKeys(t, startEffects)
+	if commandWithKey(startEffects, reminderStartPrefix+"silent-1") != nil {
+		t.Fatalf("silent reminder emitted buzzer start: %+v", commandsOf(startEffects))
+	}
+	if commandWithKey(startEffects, displayReminderPref+"silent-1") == nil {
+		t.Fatalf("silent reminder missing display reminder: %+v", commandsOf(startEffects))
+	}
+	startRecord := recordData(t, recordsOf(startEffects)[0])
+	if startRecord["reminder_state"] != reminderSuppressed || startRecord["reminder_request_id"] != "" || startRecord["reminder_stop_state"] != reminderSuppressed {
+		t.Fatalf("silent start record = %+v", startRecord)
+	}
+
+	f.advance(time.Minute)
+	f.event(t, &application.CapabilityEvent{
+		RequirementID: openingRequirement,
+		EntityID:      hallEntity,
+		EventType:     hallAwayEvent,
+		OccurredAt:    f.now().Format(time.RFC3339Nano),
+	})
+	confirmEffects := f.sink.take()
+	assertCommandKeys(t, confirmEffects)
+	if commandWithKey(confirmEffects, reminderStopPrefix+"silent-1") != nil {
+		t.Fatalf("silent reminder emitted buzzer stop: %+v", commandsOf(confirmEffects))
+	}
+	if commandWithKey(confirmEffects, displayIdlePref+"silent-1") == nil {
+		t.Fatalf("silent confirmation missing display idle: %+v", commandsOf(confirmEffects))
+	}
+	confirmRecord := recordData(t, recordsOf(confirmEffects)[0])
+	if confirmRecord["state"] != windowCompleted || confirmRecord["confirmation_source"] != sourceHall || confirmRecord["reminder_stop_state"] != reminderSuppressed {
+		t.Fatalf("silent confirm record = %+v", confirmRecord)
 	}
 }
 
