@@ -25,6 +25,9 @@ func newDisplayApp(t *testing.T, n int) *practicalApp {
 	t.Helper()
 	p := newPracticalApp(t, n)
 	cfg := practicalConfig(n)
+	// Display tests use manual windows only; keep the required daily schedule
+	// outside the test clock so the automatic heartbeat does not open it.
+	cfg.Schedule = []WindowSpec{{ID: "later", Compartment: "c1", Start: "09:00", End: "09:30"}}
 	// Display tests exercise the silent visual channel: explicit silence.
 	cfg.Reminder = &Reminder{}
 	cfg.Display = testDisplayPolicy()

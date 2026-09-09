@@ -158,8 +158,14 @@ func (s *Service) RunJob(_ context.Context, req *application.RunJobRequest) (*ap
 			}
 		}
 	case jobWindowCheck:
-		// Preserve the original full scan, with optional window_id as context.
-		// Core calls this once a minute; expiry is [start, end), not end-inclusive.
+		// Core calls this once a minute. Open today's due daily windows first,
+		// then preserve the original full expiry scan. Expiry is [start, end).
+		due, dueErr := s.openDueWindows(req.PluginInstanceID, st, now)
+		if dueErr != nil {
+			err = dueErr
+			break
+		}
+		effects = append(effects, due...)
 		missed := []string{}
 		for id, w := range st.windows {
 			if w.State == windowOpened && !now.Before(w.End) {
@@ -213,6 +219,43 @@ func (s *Service) readyForEffects(instanceID string, st *instanceState) error {
 		return status.Errorf(status.CodeUnavailable, "instance has no active event/effect stream; no action was applied")
 	}
 	return nil
+}
+
+// openDueWindows restores the minute-loop schedule owner used by the public
+// Host: Core calls window-check every minute, and the app opens each due daily
+// window once. ScheduleTick remains wire-compatible for older hosts.
+func (s *Service) openDueWindows(instanceID string, st *instanceState, now time.Time) ([]application.ApplicationEffectUnion, error) {
+	if st == nil || st.config == nil {
+		return nil, nil
+	}
+	loc, err := time.LoadLocation(st.config.Timezone)
+	if err != nil {
+		return nil, nil
+	}
+	local := now.In(loc)
+	var effects []application.ApplicationEffectUnion
+	for _, spec := range st.config.Schedule {
+		startClock, startOK := parseHHMM(spec.Start)
+		endClock, endOK := parseHHMM(spec.End)
+		if !startOK || !endOK {
+			continue
+		}
+		start := time.Date(local.Year(), local.Month(), local.Day(), startClock.Hour(), startClock.Minute(), 0, 0, loc)
+		end := time.Date(local.Year(), local.Month(), local.Day(), endClock.Hour(), endClock.Minute(), 0, 0, loc)
+		if !end.After(start) || now.Before(start) || !now.Before(end) {
+			continue
+		}
+		id := scheduleOccurrenceID(spec.ID, start)
+		if st.windows[id] != nil {
+			continue
+		}
+		if err := s.readyForEffects(instanceID, st); err != nil {
+			return nil, err
+		}
+		w := &windowTrack{ID: id, ScheduleID: spec.ID, Source: sourceSchedule, Compartment: spec.Compartment, Start: start, End: end}
+		effects = append(effects, s.startWindow(st, w, now)...)
+	}
+	return effects, nil
 }
 
 // startWindow is shared by real ScheduleTicks and the manual start Job.

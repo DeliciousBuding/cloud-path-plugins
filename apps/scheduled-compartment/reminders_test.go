@@ -92,6 +92,18 @@ func (p *practicalApp) job(jobID, args, key string) (*application.RunJobResponse
 	return p.svc.RunJob(context.Background(), &application.RunJobRequest{PluginInstanceID: testInstance, JobID: jobID, ArgsJSON: args, IdempotencyKey: key})
 }
 
+func configureWithoutSchedule(t *testing.T, p *practicalApp) {
+	t.Helper()
+	cfg := practicalConfig(1)
+	cfg.Schedule = []WindowSpec{{ID: "later", Compartment: "c1", Start: "09:00", End: "09:30"}}
+	resp, err := p.svc.ConfigureInstance(context.Background(), &application.ConfigureInstanceRequest{
+		PluginInstanceID: testInstance, Config: []byte(mustJSON(cfg)), ConfigRevision: 2,
+	})
+	if err != nil || !resp.Status.IsOK() {
+		t.Fatalf("configure without schedule: %+v, %v", resp, err)
+	}
+}
+
 func (p *practicalApp) start(t *testing.T, id, comp string, minutes int) map[string]any {
 	t.Helper()
 	resp, err := p.job(jobStartReminder, mustJSON(startReminderArgs{CompartmentID: comp, Minutes: minutes, WindowID: id}), id)
@@ -355,6 +367,7 @@ func TestExpiryBoundaryAndLatePhysicalConfirmation(t *testing.T) {
 	for _, checkFirst := range []bool{false, true} {
 		t.Run(fmt.Sprint(checkFirst), func(t *testing.T) {
 			p := newPracticalApp(t, 1)
+			configureWithoutSchedule(t, p)
 			p.start(t, "one-minute", "c1", 1)
 			p.sink.take()
 			p.advance(time.Minute - time.Second)
@@ -413,6 +426,24 @@ func TestKeyRoutingAndDelayedEventsAreDeterministic(t *testing.T) {
 
 func scheduleTick(id, comp string, start time.Time, duration time.Duration) *application.ScheduleTick {
 	return &application.ScheduleTick{ScheduleID: "window-" + id, OccurredAt: start.Format(time.RFC3339), WindowJSON: mustJSON(map[string]string{"id": id, "compartment": comp, "start": start.Format(time.RFC3339), "end": start.Add(duration).Format(time.RFC3339)})}
+}
+
+func TestAutomaticWindowCheckOpensDueDailyWindow(t *testing.T) {
+	p := newPracticalApp(t, 1)
+
+	resp, err := p.job(jobWindowCheck, `{}`, "minute-open")
+	requireJobResult(t, resp, err)
+	effects := p.sink.take()
+	id := scheduleOccurrenceID("morning", p.now())
+	if p.window(t, id).State != windowOpened || countRequestCommand(effects) != 1 {
+		t.Fatalf("automatic window-check did not open due schedule: %+v", effects)
+	}
+
+	resp, err = p.job(jobWindowCheck, `{}`, "minute-repeat")
+	requireJobResult(t, resp, err)
+	if len(p.sink.take()) != 0 {
+		t.Fatal("automatic window-check replayed an already-open occurrence")
+	}
 }
 
 func TestDailyScheduleUsesIndependentStableOccurrences(t *testing.T) {
