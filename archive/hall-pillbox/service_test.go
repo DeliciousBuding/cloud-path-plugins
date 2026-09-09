@@ -309,6 +309,7 @@ func TestDescriptorAndManifestIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	manifestText := strings.ReplaceAll(string(manifest), "\r\n", "\n")
 	for _, want := range []string{
 		"kind: Application",
 		"id: " + pluginIDValue,
@@ -324,13 +325,18 @@ func TestDescriptorAndManifestIdentity(t *testing.T) {
 		"title: 霍尔药盒",
 		"route: hall-pillbox",
 		"visibility: instance-enabled",
+		"type: metrics\n                source: records\n                recordType: window",
 		"type: schedule",
 		"type: actions",
 		"source: manual-jobs",
-		"recordType: window",
-		"source: config",
+		"type: records\n                source: records\n                recordType: window",
+		"type: form\n                source: config\n                fields:",
+		"key: app_config.timezone",
+		"key: app_config.compartment",
+		"key: app_config.reminder.freq",
+		"key: app_config.reminder.duration",
 	} {
-		if !strings.Contains(string(manifest), want) {
+		if !strings.Contains(manifestText, want) {
 			t.Fatalf("plugin.yaml missing %q", want)
 		}
 	}
