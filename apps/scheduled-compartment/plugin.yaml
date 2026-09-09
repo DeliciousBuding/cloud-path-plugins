@@ -1,7 +1,7 @@
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Application
 id: io.github.deliciousbuding.cloud-path-app-scheduled-compartment
-version: 0.2.7
+version: 0.2.8
 protocol: 1
 # Executable entrypoint. The Application Protocol v1 service is implemented in
 # cmd/cloud-path-app-scheduled-compartment and served over the host transport.
@@ -38,41 +38,97 @@ contributes:
         pages:
           - id: home
             title: 药盒提醒
+            description: 按每天设定的时间提醒取药，并记录是否按时确认。
             sections:
               - type: status
                 source: instance
+                title: 运行状态
+                description: 查看取药提醒是否正常运行。
               - type: metrics
                 source: records
                 recordType: window
+                title: 最近一次提醒
+                description: 查看最近一次取药提醒的状态和时间。
+                emptyText: 还没有取药提醒记录。
+                fields:
+                  - key: state
+                    label: 当前状态
+                    values:
+                      opened: 待确认取药
+                      completed: 已确认取药
+                      missed: 已错过
+                      completed_late: 迟到确认取药
+                  - key: compartment_name
+                    label: 药格
+                    hideWhenEmpty: true
+                  - key: start
+                    label: 提醒时间
+                    format: time
+                    hideWhenEmpty: true
+                  - key: confirmed_at
+                    label: 确认时间
+                    format: time
+                    hideWhenEmpty: true
               - type: actions
                 source: manual-jobs
+                title: 临时操作
+                description: 可以临时开始一次提醒，或补记某次取药已经确认。
               - type: records
                 source: records
                 recordType: window
                 presentation: timeline
+                title: 提醒记录
+                description: 查看每次提醒的状态、药格和时间。
+                emptyText: 还没有取药提醒记录。
+                fields:
+                  - key: title
+                    label: 提醒
+                  - key: state
+                    label: 状态
+                    values:
+                      opened: 待确认取药
+                      completed: 已确认取药
+                      missed: 已错过
+                      completed_late: 迟到确认取药
+                  - key: compartment_name
+                    label: 药格
+                    hideWhenEmpty: true
+                  - key: start
+                    label: 提醒时间
+                    format: time
+                    hideWhenEmpty: true
+                  - key: missed_at
+                    label: 错过时间
+                    format: time
+                    hideWhenEmpty: true
               - type: schedule
                 source: records
                 recordType: window
+                title: 自动提醒计划
+                description: 查看每天自动提醒取药的时间，以及下一次提醒。
+                emptyText: 还没有设置自动提醒计划。
               - type: form
                 source: config
+                title: 提醒设置
+                description: 设置提醒使用的时区和声音。
                 fields:
                   - key: app_config.timezone
                     label: 时区
                     type: string
-                    description: 按 IANA 时区名称填写，例如 Asia/Shanghai。
+                    description: 填写所在时区，例如中国内地使用 Asia/Shanghai。
                     placeholder: Asia/Shanghai
                     required: true
                   - key: app_config.reminder.freq
-                    label: 提醒音档位
+                    label: 提示音档位
                     type: integer
-                    description: 0 为静音；1–9 为蜂鸣器频率档。
+                    description: 0 表示静音；1–9 使用不同的提示音档位。
                     minimum: 0
                     maximum: 9
                     default: 0
                   - key: app_config.reminder.duration
-                    label: 提醒时长档位
+                    label: 提示时长档位
                     type: integer
-                    description: 0 为不发声；1–9 为蜂鸣器时长档。
+                    description: 0 表示不发声；1–9 使用不同的提示时长档位。
                     minimum: 0
                     maximum: 9
                     default: 0
