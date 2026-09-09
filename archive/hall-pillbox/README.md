@@ -2,7 +2,7 @@
 
 把霍尔开盖传感器和可选 K1 按键变成药盒确认输入：按每日计划或管理台操作启动提醒窗口，记录按时确认、超时未确认和迟到确认，并跟踪蜂鸣器/显示命令的真实回执。
 
-**版本 0.1.3；需要 Core >=0.2.15 且 <0.3.0。** 静音 `0/0` 的 `start-window → display reminder ACK → dashboard confirm → display idle ACK` 已完成生产真板 E2E，状态为 `VERIFIED`；物理磁铁 `opening/close-ignore/away` 序列仍需人工操作，状态为 `PLANNED`。仓库测试另覆盖内存协议、状态机、绑定和 effect 失败边界。
+**版本 0.1.4；需要 Core >=0.2.15 且 <0.3.0。** 静音 `0/0` 的 `start-window → display reminder ACK → dashboard confirm → display idle ACK` 已完成生产真板 E2E，状态为 `VERIFIED`；物理磁铁 `opening/close-ignore/away` 序列仍需人工操作，状态为 `PLANNED`。仓库测试另覆盖内存协议、状态机、绑定和 effect 失败边界。
 
 本应用是软件-only Application 插件：不访问 COM3、不启动/停止 Edge、不烧录、不修改现网配置。它只通过公开 SDK 请求已绑定的 Capability。
 
