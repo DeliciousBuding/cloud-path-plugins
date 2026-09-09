@@ -345,7 +345,18 @@ func TestDescriptorAndManifestIdentity(t *testing.T) {
 		"key: confirmed_at",
 		"key: missed_at",
 		"key: app_config.timezone",
+		"label: 药格标识",
 		"key: app_config.compartment",
+		"key: app_config.schedule",
+		"type: array",
+		"minItems: 1",
+		"itemFields:",
+		"label: 计划 ID",
+		"label: 药格标识（可选）",
+		"label: 开始时间",
+		"placeholder: \"08:00\"",
+		"label: 结束时间",
+		"placeholder: \"08:30\"",
 		"key: app_config.reminder.freq",
 		"key: app_config.reminder.duration",
 	} {
@@ -356,6 +367,18 @@ func TestDescriptorAndManifestIdentity(t *testing.T) {
 	mirror, err := os.ReadFile("requirements.yaml")
 	if err != nil {
 		t.Fatal(err)
+	}
+	scheduleStart := strings.Index(manifestText, "              - type: schedule")
+	actionsStart := -1
+	if scheduleStart >= 0 {
+		actionsStart = strings.Index(manifestText[scheduleStart:], "              - type: actions")
+	}
+	if scheduleStart < 0 || actionsStart < 0 {
+		t.Fatal("schedule/actions section boundary missing")
+	}
+	scheduleBlock := manifestText[scheduleStart : scheduleStart+actionsStart]
+	if strings.Contains(scheduleBlock, "\n                source:") || strings.Contains(scheduleBlock, "\n                recordType:") {
+		t.Fatal("schedule section must omit source/recordType until Core accepts jobs")
 	}
 	for _, want := range []string{hallCap, keyCap, buzzerCap, displayCap} {
 		if !strings.Contains(string(mirror), want) {
