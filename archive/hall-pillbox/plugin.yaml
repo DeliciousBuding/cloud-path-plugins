@@ -1,7 +1,7 @@
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Application
 id: io.github.deliciousbuding.cloud-path-app-hall-pillbox
-version: 0.1.4
+version: 0.1.5
 protocol: 1
 entrypoint: cloud-path-app-hall-pillbox
 compatibility:
@@ -35,7 +35,7 @@ contributes:
           icon: door-open
           order: 40
           route: hall-pillbox
-          visibility: instance-enabled
+          visibility: always
         pages:
           - id: home
             title: 霍尔药盒
