@@ -2,7 +2,7 @@
 
 `io.github.deliciousbuding.cloud-path-app-sensor-alert` 是一个设备无关的 CloudPath Application Plugin。它只消费绑定实体的观测和 CapabilityEvent，再通过领域记录与通用 `tone` / `led` 命令表达告警动作，不打开串口、不访问网络、不烧录固件。
 
-版本：`0.1.3`
+版本：`0.1.4`
 Application Protocol：`1`
 最低 Core：`0.2.15`
 
