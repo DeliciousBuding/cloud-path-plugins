@@ -4,7 +4,7 @@ A capability-only CloudPath **Application plugin** with a default walking light
 and an opt-in **service-call / acknowledge** workflow for duty desks and
 workstation requests. It is not a medical emergency or life-safety system.
 
-Version **0.1.7** requires **Core and public SDK v0.2.15+** (Core <0.3.0).
+Version **0.1.8** requires **Core v0.2.29+** (Core <0.3.0) and public SDK v0.2.15+.
 Status: **IMPLEMENTED** — package and Application Protocol tests are not
 real-device acceptance evidence.
 
