@@ -139,6 +139,11 @@ def validate_contributes_block(lines, start_line):
         indent = len(raw) - len(raw.lstrip(" "))
 
         if stripped.startswith("- "):
+            # Contribution items live exactly one indentation level below a
+            # category. Deeper sequences belong to nested contribution fields
+            # such as ui.pages[].sections[] and must not be parsed as items.
+            if cat_indent is None or indent != cat_indent + 2:
+                continue
             finish_item()
             item_indent = indent
             item = {"id": None, "has_id": False}
@@ -319,6 +324,32 @@ def self_test():
         ("contributes duplicate id", meta + "contributes:\n  drivers:\n    - id: demodriver\n    - id: demodriver\n", 1),
         ("contributes path id", meta + contributes_lines.replace("id: demodriver", "id: bad/id"), 1),
         ("contributes missing id", meta + "contributes:\n  drivers:\n    - title: No ID\n", 1),
+        (
+            "nested ui sequence",
+            "apiVersion: plugins.cloudpath.dev/v1alpha1\n"
+            "kind: Application\n"
+            "id: io.github.acme.cloud-path-app-demo\n"
+            "version: 0.1.0\n"
+            "protocol: 1\n"
+            "entrypoint: cloudpath-app-demo\n"
+            "contributes:\n"
+            "  applications:\n"
+            "    - id: demo\n"
+            "      title: Demo\n"
+            "      ui:\n"
+            "        apiVersion: 1\n"
+            "        navigation:\n"
+            "          title: Demo\n"
+            "          route: demo\n"
+            "        pages:\n"
+            "          - id: home\n"
+            "            title: Home\n"
+            "            sections:\n"
+            "              - type: status\n"
+            "              - type: actions\n"
+            "                source: manual-jobs\n",
+            0,
+        ),
     ]
     errors = []
     for name, text, want in cases:

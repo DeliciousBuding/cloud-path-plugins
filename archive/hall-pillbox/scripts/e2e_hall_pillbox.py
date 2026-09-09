@@ -36,7 +36,7 @@ DEFAULT_BASE_URL = "https://cloudpath.vectorcontrol.tech"
 DEFAULT_DEVICE = "lab-edge/stcb-real-1"
 DEFAULT_BOX_PROD = "box-prod"
 DEFAULT_APP_EDGE = "server"
-DEFAULT_PLUGIN_VERSION = "0.1.1"
+DEFAULT_PLUGIN_VERSION = "0.1.2"
 
 HALL_CAPABILITY = "cloudpath.dev/capability/hall@1"
 HALL_CLOSE = HALL_CAPABILITY + "/close"

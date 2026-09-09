@@ -262,7 +262,7 @@ func TestDescriptorAndManifestIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if desc.ApplicationID != pluginIDValue || desc.Version != "0.1.1" || desc.DeclarativeOnly {
+	if desc.ApplicationID != pluginIDValue || desc.Version != pluginVersion || desc.DeclarativeOnly {
 		t.Fatalf("descriptor = %+v", desc)
 	}
 	if len(desc.Requirements) != 4 {
@@ -319,6 +319,16 @@ func TestDescriptorAndManifestIdentity(t *testing.T) {
 		"capability: " + keyCap,
 		"capability: " + buzzerCap,
 		"capability: " + displayCap,
+		"ui:",
+		"apiVersion: 1",
+		"title: 霍尔药盒",
+		"route: hall-pillbox",
+		"visibility: instance-enabled",
+		"type: schedule",
+		"type: actions",
+		"source: manual-jobs",
+		"recordType: window",
+		"source: config",
 	} {
 		if !strings.Contains(string(manifest), want) {
 			t.Fatalf("plugin.yaml missing %q", want)
