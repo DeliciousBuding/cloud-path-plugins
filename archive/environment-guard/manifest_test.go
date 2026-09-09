@@ -31,6 +31,8 @@ type manifestRequirement struct {
 	Cardinality string `json:"cardinality"`
 }
 
+const environmentUIJSON = `{"apiVersion":1,"navigation":{"title":"环境监测","icon":"leaf","order":30,"route":"environment","visibility":"instance-enabled"},"pages":[{"id":"home","title":"环境监测","sections":[{"type":"status","source":"instance"},{"type":"metrics","source":"instance"},{"type":"actions","source":"manual-jobs"},{"type":"records","source":"records","recordType":"alert","presentation":"timeline"},{"type":"form","source":"config"}]}]}`
+
 func TestManifestDescriptorAndRequirementMirror(t *testing.T) {
 	var manifest struct {
 		API           string `json:"apiVersion"`
@@ -46,8 +48,9 @@ func TestManifestDescriptorAndRequirementMirror(t *testing.T) {
 		Requirements []manifestRequirement `json:"requirements"`
 		Contributes  struct {
 			Applications []struct {
-				ID    string `json:"id"`
-				Title string `json:"title"`
+				ID    string          `json:"id"`
+				Title string          `json:"title"`
+				UI    json.RawMessage `json:"ui"`
 			} `json:"applications"`
 		} `json:"contributes"`
 	}
@@ -68,6 +71,16 @@ func TestManifestDescriptorAndRequirementMirror(t *testing.T) {
 	}
 	if len(manifest.Contributes.Applications) != 1 || manifest.Contributes.Applications[0].ID != "environment-guard" || manifest.Contributes.Applications[0].Title == "" {
 		t.Fatal("contribution identity missing")
+	}
+	var gotUI, wantUI any
+	if err := json.Unmarshal(manifest.Contributes.Applications[0].UI, &gotUI); err != nil {
+		t.Fatalf("invalid UI contribution: %v", err)
+	}
+	if err := json.Unmarshal([]byte(environmentUIJSON), &wantUI); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(gotUI, wantUI) {
+		t.Fatalf("UI contribution drift: %#v", gotUI)
 	}
 	if len(manifest.Permissions) != 4 {
 		t.Fatal("all permission families must explicitly be empty")

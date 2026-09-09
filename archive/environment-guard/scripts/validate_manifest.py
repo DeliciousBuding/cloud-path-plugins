@@ -22,6 +22,29 @@ REQUIREMENTS = [
 ]
 
 
+UI = {
+    "apiVersion": 1,
+    "navigation": {
+        "title": "环境监测",
+        "icon": "leaf",
+        "order": 30,
+        "route": "environment",
+        "visibility": "instance-enabled",
+    },
+    "pages": [{
+        "id": "home",
+        "title": "环境监测",
+        "sections": [
+            {"type": "status", "source": "instance"},
+            {"type": "metrics", "source": "instance"},
+            {"type": "actions", "source": "manual-jobs"},
+            {"type": "records", "source": "records", "recordType": "alert", "presentation": "timeline"},
+            {"type": "form", "source": "config"},
+        ],
+    }],
+}
+
+
 def unique_object(pairs):
     result = {}
     for key, value in pairs:
@@ -40,7 +63,7 @@ def parse(text):
 def validate(value):
     expected = {
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
-        "kind": "Application", "id": PLUGIN_ID, "version": "0.1.0",
+        "kind": "Application", "id": PLUGIN_ID, "version": "0.1.1",
         "protocol": 1, "entrypoint": ENTRYPOINT,
         "compatibility": {"core": ">=0.2.15 <0.3.0"},
         "permissions": {"hardware": [], "network": [], "filesystem": [], "secrets": []},
@@ -63,8 +86,10 @@ def validate(value):
         apps = contributions["applications"]
         if not isinstance(apps, list) or len(apps) != 1 or not isinstance(apps[0], dict):
             errors.append("exactly one application contribution is required")
-        elif set(apps[0]) != {"id", "title"} or apps[0].get("id") != "environment-guard" or not isinstance(apps[0].get("title"), str) or not apps[0]["title"].strip():
+        elif set(apps[0]) != {"id", "title", "ui"} or apps[0].get("id") != "environment-guard" or not isinstance(apps[0].get("title"), str) or not apps[0].get("title", "").strip():
             errors.append("application contribution identity/title is invalid")
+        elif apps[0].get("ui") != UI:
+            errors.append("application UI contribution is invalid")
     return errors
 
 
@@ -118,6 +143,9 @@ def self_test(root):
             pass
         else:
             raise AssertionError("accepted malformed/ambiguous JSON")
+    bad_ui = copy.deepcopy(base)
+    bad_ui["contributes"]["applications"][0]["ui"]["navigation"]["route"] = "bad/route"
+    assert validate(bad_ui), "accepted invalid UI route"
     assert list(imports('package sample\nimport "x/internal/y"')) == ["x/internal/y"]
     print("manifest validator self-test OK")
 
