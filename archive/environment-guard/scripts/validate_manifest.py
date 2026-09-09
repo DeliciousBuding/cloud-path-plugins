@@ -54,23 +54,15 @@ UI = {
                         {
                             "key": "temperature.value",
                             "label": "温度",
+                            "unit": "temperature.unit",
                             "precision": 1,
-                            "hideWhenEmpty": True
-                        },
-                        {
-                            "key": "temperature.unit_label",
-                            "label": "温度单位",
                             "hideWhenEmpty": True
                         },
                         {
                             "key": "illuminance.value",
                             "label": "光照",
+                            "unit": "illuminance.unit",
                             "precision": 0,
-                            "hideWhenEmpty": True
-                        },
-                        {
-                            "key": "illuminance.unit_label",
-                            "label": "光照单位",
                             "hideWhenEmpty": True
                         },
                         {
@@ -136,12 +128,8 @@ UI = {
                         {
                             "key": "value",
                             "label": "读数",
+                            "unit": "unit",
                             "precision": 1,
-                            "hideWhenEmpty": True
-                        },
-                        {
-                            "key": "unit",
-                            "label": "读数单位",
                             "hideWhenEmpty": True
                         }
                     ]
@@ -262,7 +250,7 @@ def parse(text):
 def validate(value):
     expected = {
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
-        "kind": "Application", "id": PLUGIN_ID, "version": "0.1.4",
+        "kind": "Application", "id": PLUGIN_ID, "version": "0.1.5",
         "protocol": 1, "entrypoint": ENTRYPOINT,
         "compatibility": {"core": ">=0.2.15 <0.3.0"},
         "permissions": {"hardware": [], "network": [], "filesystem": [], "secrets": []},

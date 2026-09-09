@@ -2,7 +2,7 @@
   "apiVersion": "plugins.cloudpath.dev/v1alpha1",
   "kind": "Application",
   "id": "io.github.deliciousbuding.cloud-path-app-environment-guard",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "protocol": 1,
   "entrypoint": "cloud-path-app-environment-guard",
   "compatibility": {
@@ -63,23 +63,15 @@
                     {
                       "key": "temperature.value",
                       "label": "温度",
+                      "unit": "temperature.unit",
                       "precision": 1,
-                      "hideWhenEmpty": true
-                    },
-                    {
-                      "key": "temperature.unit_label",
-                      "label": "温度单位",
                       "hideWhenEmpty": true
                     },
                     {
                       "key": "illuminance.value",
                       "label": "光照",
+                      "unit": "illuminance.unit",
                       "precision": 0,
-                      "hideWhenEmpty": true
-                    },
-                    {
-                      "key": "illuminance.unit_label",
-                      "label": "光照单位",
                       "hideWhenEmpty": true
                     },
                     {
@@ -145,12 +137,8 @@
                     {
                       "key": "value",
                       "label": "读数",
+                      "unit": "unit",
                       "precision": 1,
-                      "hideWhenEmpty": true
-                    },
-                    {
-                      "key": "unit",
-                      "label": "读数单位",
                       "hideWhenEmpty": true
                     }
                   ]
