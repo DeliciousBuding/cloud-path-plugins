@@ -324,7 +324,7 @@ func TestDescriptorAndManifestIdentity(t *testing.T) {
 		"apiVersion: 1",
 		"title: 霍尔药盒",
 		"route: hall-pillbox",
-		"visibility: instance-enabled",
+		"visibility: always",
 		"type: metrics",
 		"recordType: window",
 		"type: schedule",
