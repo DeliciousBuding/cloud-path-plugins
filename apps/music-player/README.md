@@ -4,13 +4,13 @@
 把内置歌曲每轮重复压成一条 `tone-sequence` 命令，把单音压成一条 `tone` 命令，并维护当前 `music_session` 状态。
 它不直接访问串口、浏览器、烧录工具或现网配置，只使用 Core 绑定后提供的实体 ID。
 
-Version **0.2.3**；需要 Core `>=0.2.15 <0.3.0` 和公开 Go SDK v0.2.15。
+Version **0.2.4**；需要 Core `>=0.2.15 <0.3.0` 和公开 Go SDK v0.2.15。
 状态：`IMPLEMENTED`。仓库测试使用 fake event stream / fake effect writer，
 不是真板或现场验收证据。
 
 ## Web UI 贡献
 
-Manifest 声明 `ui.apiVersion: 1`，安装并启用实例后注册导航“音乐播放器”和独立路由 `/apps/music`。 停用后入口仍保留，页面会明确显示当前未启用。首页由 Core 白名单 section 渲染：播放会话状态、来自 `music_session` 记录的指标、`play-song` / `play-note` 手动操作和 `music_session` 时间线；不注入 JavaScript、HTML 或远程资源。当前配置为空，因此不显示配置表单。
+Manifest 声明 `ui.apiVersion: 1`，安装实例后注册导航“音乐播放器”和独立路由 `/apps/music`。停用后入口仍保留，页面会明确显示当前未启用。首页由 Core 白名单 section 渲染：播放会话状态、来自 `music_session` 记录的指标、`play-song` / `play-note` 手动操作和 `music_session` 时间线；不注入 JavaScript、HTML 或远程资源。当前配置为空，因此不显示配置表单。
 
 ## Capability requirements
 
