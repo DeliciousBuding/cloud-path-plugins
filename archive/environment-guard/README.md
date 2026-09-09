@@ -1,6 +1,6 @@
 # Environment Guard
 
-设备无关的 CloudPath Application 插件，版本 **0.1.3**。将已绑定的温度、光照观测变成工位环境快照和阈值变化记录，不轮询设备，不请求设备动作，不发送系统外通知。
+设备无关的 CloudPath Application 插件，版本 **0.1.4**。将已绑定的温度、光照观测变成工位环境快照和阈值变化记录，不轮询设备，不请求设备动作，不发送系统外通知。
 
 状态：**IMPLEMENTED**。应用代码、行为测试和 public SDK RPC 可本地验证；安装运行、Core 观测扇入、真实来源单位/光敏方向及板测仍由集成验收确认。此仓库未发布、未部署。
 
@@ -38,7 +38,7 @@ Manifest 声明 `ui.apiVersion: 1`，安装并启用实例后注册导航“环�
   "edge_id": "server",
   "instance_id": "desk-environment",
   "plugin_id": "io.github.deliciousbuding.cloud-path-app-environment-guard",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "enabled": true,
   "config": {
     "app_config": "{\"timezone\":\"UTC\",\"temperature_min\":18,\"temperature_max\":28,\"light_threshold\":null,\"stale_after_s\":120}"

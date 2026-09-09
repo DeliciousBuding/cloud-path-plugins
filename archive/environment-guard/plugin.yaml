@@ -2,7 +2,7 @@
   "apiVersion": "plugins.cloudpath.dev/v1alpha1",
   "kind": "Application",
   "id": "io.github.deliciousbuding.cloud-path-app-environment-guard",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "protocol": 1,
   "entrypoint": "cloud-path-app-environment-guard",
   "compatibility": {

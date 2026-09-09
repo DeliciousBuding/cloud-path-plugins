@@ -262,7 +262,7 @@ def parse(text):
 def validate(value):
     expected = {
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
-        "kind": "Application", "id": PLUGIN_ID, "version": "0.1.3",
+        "kind": "Application", "id": PLUGIN_ID, "version": "0.1.4",
         "protocol": 1, "entrypoint": ENTRYPOINT,
         "compatibility": {"core": ">=0.2.15 <0.3.0"},
         "permissions": {"hardware": [], "network": [], "filesystem": [], "secrets": []},
