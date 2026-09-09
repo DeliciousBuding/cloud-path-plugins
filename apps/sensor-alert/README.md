@@ -8,7 +8,7 @@ Application Protocol：`1`
 
 ## Web UI 贡献
 
-Manifest 声明 `ui.apiVersion: 1`，安装并启用实例后注册导航“传感器告警”和独立路由 `/apps/sensor-alert`。 停用后入口仍保留，页面会明确显示当前未启用。首页由 Core 白名单 section 渲染：实例状态、来自 `alert` 记录的最新指标、布防/撤防/状态手动操作、`alert` 时间线和配置表单。表单覆盖阈值、静默、冷却和 LED 掩码；`alert_tone` 复杂对象仍保留在高级参数。
+Manifest 声明 `ui.apiVersion: 1`，安装实例后注册导航“传感器告警”和独立路由 `/apps/sensor-alert`。停用后入口仍保留，页面会明确显示当前未启用。首页由 Core 白名单 section 渲染：实例状态、来自 `alert` 记录的最新指标、布防/撤防/状态手动操作、`alert` 时间线和配置表单。表单覆盖阈值、静默、冷却和 LED 掩码；`alert_tone` 复杂对象仍保留在高级参数。
 
 ## 与 Environment Guard 的边界
 
