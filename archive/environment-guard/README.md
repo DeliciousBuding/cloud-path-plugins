@@ -6,7 +6,7 @@
 
 ## Web UI 贡献
 
-Manifest 声明 `ui.apiVersion: 1`，安装并启用实例后注册导航“环境监测”和独立路由 `/apps/environment`。首页由 Core 白名单 section 渲染：实例状态、来自 `environment/current` 记录的指标、手动刷新、`alert` 变化时间线和配置表单。表单覆盖时区、温度/光照阈值、回差、过期时间和单位；不注入 JavaScript、HTML、远程资源或全局 CSS。原始配置 JSON 仅保留为高级入口。
+Manifest 声明 `ui.apiVersion: 1`，安装并启用实例后注册导航“环境监测”和独立路由 `/apps/environment`。首页由 Core 白名单 section 渲染：实例状态、来自 `environment/current` 记录的指标、手动刷新、`alert` 变化时间线和配置表单。读数值与动态单位分卡显示，单位取自记录中的 `unit_label`/`unit`，不在 manifest 中伪造固定量纲。表单覆盖时区、温度/光照阈值、回差、过期时间和单位；不注入 JavaScript、HTML、远程资源或全局 CSS。原始配置 JSON 仅保留为高级入口。
 
 ## 默认做什么
 
