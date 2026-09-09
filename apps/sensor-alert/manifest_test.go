@@ -23,6 +23,28 @@ func readJSON(t *testing.T, path string, value any) {
 	}
 }
 
+func stripUII18n(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(typed))
+		for key, child := range typed {
+			if key == "i18n" || key == "valuesI18n" {
+				continue
+			}
+			out[key] = stripUII18n(child)
+		}
+		return out
+	case []any:
+		out := make([]any, len(typed))
+		for i, child := range typed {
+			out[i] = stripUII18n(child)
+		}
+		return out
+	default:
+		return value
+	}
+}
+
 type manifestRequirement struct {
 	ID          string `json:"id"`
 	Capability  string `json:"capability"`
@@ -63,7 +85,7 @@ func TestManifestDescriptorAndRequirementMirror(t *testing.T) {
 	}
 	if manifest.API != "plugins.cloudpath.dev/v1alpha1" || manifest.Kind != "Application" ||
 		manifest.ID != ApplicationID() || manifest.Version != Version() || manifest.Protocol != 1 ||
-		manifest.Entrypoint != "cloud-path-app-sensor-alert" || manifest.Compatibility.Core != ">=0.2.15 <0.3.0" {
+		manifest.Entrypoint != "cloud-path-app-sensor-alert" || manifest.Compatibility.Core != ">=0.2.29 <0.3.0" {
 		t.Fatalf("manifest identity drift: %+v", manifest)
 	}
 	if descriptor.ApplicationID != manifest.ID || descriptor.Version != manifest.Version || descriptor.DeclarativeOnly {
@@ -79,7 +101,7 @@ func TestManifestDescriptorAndRequirementMirror(t *testing.T) {
 	if err := json.Unmarshal([]byte(sensorAlertUIJSON), &wantUI); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(gotUI, wantUI) {
+	if !reflect.DeepEqual(stripUII18n(gotUI), stripUII18n(wantUI)) {
 		t.Fatalf("UI contribution drift: %#v", gotUI)
 	}
 	if len(manifest.Permissions) != 4 {

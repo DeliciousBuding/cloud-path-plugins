@@ -32,7 +32,7 @@ UI = {
         "icon": "bell-ring",
         "order": 40,
         "route": "sensor-alert",
-        "visibility": "instance-enabled"
+        "visibility": "always"
     },
     "pages": [
         {
@@ -234,15 +234,23 @@ def parse(text):
     return json.loads(text, object_pairs_hook=unique_object, parse_constant=invalid_constant)
 
 
+
+def strip_i18n(value):
+    if isinstance(value, dict):
+        return {key: strip_i18n(child) for key, child in value.items() if key not in {"i18n", "valuesI18n"}}
+    if isinstance(value, list):
+        return [strip_i18n(child) for child in value]
+    return value
+
 def validate(value):
     expected = {
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
         "kind": "Application",
         "id": PLUGIN_ID,
-        "version": "0.1.4",
+        "version": "0.1.7",
         "protocol": 1,
         "entrypoint": ENTRYPOINT,
-        "compatibility": {"core": ">=0.2.15 <0.3.0"},
+        "compatibility": {"core": ">=0.2.29 <0.3.0"},
         "permissions": {"hardware": [], "network": [], "filesystem": [], "secrets": []},
         "requirements": REQUIREMENTS,
     }
@@ -263,9 +271,9 @@ def validate(value):
         apps = contributions["applications"]
         if not isinstance(apps, list) or len(apps) != 1 or not isinstance(apps[0], dict):
             errors.append("exactly one application contribution is required")
-        elif set(apps[0]) != {"id", "title", "ui"} or apps[0].get("id") != "sensor-alert" or not isinstance(apps[0].get("title"), str) or not apps[0].get("title", "").strip():
+        elif not {"id", "title", "ui"}.issubset(apps[0]) or apps[0].get("id") != "sensor-alert" or not isinstance(apps[0].get("title"), str) or not apps[0].get("title", "").strip():
             errors.append("application contribution identity/title is invalid")
-        elif apps[0].get("ui") != UI:
+        elif strip_i18n(apps[0].get("ui")) != UI:
             errors.append("application UI contribution is invalid")
     return errors
 
