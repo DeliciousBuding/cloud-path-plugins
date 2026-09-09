@@ -21,7 +21,7 @@ import (
 
 const (
 	pluginID          = "io.github.deliciousbuding.cloud-path-app-environment-guard"
-	pluginVersion     = "0.1.2"
+	pluginVersion     = "0.1.3"
 	jobBootstrap      = "bootstrap"
 	jobFreshness      = "check-freshness"
 	jobRefresh        = "refresh-status"

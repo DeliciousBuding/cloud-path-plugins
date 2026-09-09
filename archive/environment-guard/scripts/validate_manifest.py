@@ -38,22 +38,101 @@ UI = {
             "sections": [
                 {
                     "type": "status",
-                    "source": "instance"
+                    "source": "instance",
+                    "title": "应用状态",
+                    "description": "查看应用是否正常运行，以及最近一次状态同步。",
+                    "emptyText": "暂时没有应用状态信息。"
                 },
                 {
                     "type": "metrics",
                     "source": "records",
-                    "recordType": "environment"
+                    "recordType": "environment",
+                    "title": "当前环境",
+                    "description": "显示最近一次收到的温度、光照和环境状态。",
+                    "emptyText": "还没有收到环境数据，请确认设备已连接并开始上报。",
+                    "fields": [
+                        {
+                            "key": "temperature.value",
+                            "label": "温度",
+                            "unit": "temperature.unit",
+                            "precision": 1,
+                            "hideWhenEmpty": True
+                        },
+                        {
+                            "key": "illuminance.value",
+                            "label": "光照",
+                            "unit": "illuminance.unit",
+                            "precision": 0,
+                            "hideWhenEmpty": True
+                        },
+                        {
+                            "key": "status",
+                            "label": "环境状态",
+                            "values": {
+                                "within_thresholds": "正常",
+                                "attention": "需要关注",
+                                "stale": "数据已过期",
+                                "unknown": "状态未知"
+                            }
+                        },
+                        {
+                            "key": "observed_at",
+                            "label": "最近观测",
+                            "format": "time",
+                            "hideWhenEmpty": True
+                        }
+                    ]
                 },
                 {
                     "type": "actions",
-                    "source": "manual-jobs"
+                    "source": "manual-jobs",
+                    "title": "手动操作",
+                    "description": "需要时重新计算当前状态，不会重新读取传感器。",
+                    "emptyText": "暂无可执行的操作。"
                 },
                 {
                     "type": "records",
                     "source": "records",
                     "recordType": "alert",
-                    "presentation": "timeline"
+                    "presentation": "timeline",
+                    "title": "变化记录",
+                    "description": "查看温度和光照进入、离开设定范围的最近记录。",
+                    "emptyText": "还没有温度或光照变化记录。",
+                    "fields": [
+                        {
+                            "key": "title",
+                            "label": "变化"
+                        },
+                        {
+                            "key": "summary",
+                            "label": "说明"
+                        },
+                        {
+                            "key": "status",
+                            "label": "状态",
+                            "values": {
+                                "entered": "进入设定范围",
+                                "recovered": "已恢复正常"
+                            }
+                        },
+                        {
+                            "key": "condition",
+                            "label": "类型",
+                            "values": {
+                                "temperature-high": "温度偏高",
+                                "temperature-low": "温度偏低",
+                                "light-below": "光照低于设定值",
+                                "light-above": "光照高于设定值"
+                            }
+                        },
+                        {
+                            "key": "value",
+                            "label": "读数",
+                            "unit": "unit",
+                            "precision": 1,
+                            "hideWhenEmpty": True
+                        }
+                    ]
                 },
                 {
                     "type": "form",
@@ -63,7 +142,7 @@ UI = {
                             "key": "app_config.timezone",
                             "label": "时区",
                             "type": "string",
-                            "description": "UTC 或明确的 IANA 时区名称；不要使用 Local。",
+                            "description": "用于显示观测时间。填写 UTC 或 Asia/Shanghai 这样的时区名称。",
                             "placeholder": "Asia/Shanghai",
                             "default": "UTC"
                         },
@@ -71,55 +150,59 @@ UI = {
                             "key": "app_config.temperature_min",
                             "label": "温度下限",
                             "type": "number",
-                            "description": "原始温度读数的下限，必须小于温度上限。",
+                            "description": "低于这个温度时，环境状态会提示需要关注。数值使用传感器上报的单位。",
                             "default": 18
                         },
                         {
                             "key": "app_config.temperature_max",
                             "label": "温度上限",
                             "type": "number",
-                            "description": "原始温度读数的上限，必须大于温度下限。",
+                            "description": "高于这个温度时，环境状态会提示需要关注。数值使用传感器上报的单位。",
                             "default": 28
                         },
                         {
                             "key": "app_config.light_threshold",
-                            "label": "光照阈值",
+                            "label": "光照提醒值",
                             "type": "number",
-                            "description": "留空表示关闭光照阈值，仅显示原始读数。",
+                            "description": "需要光照提醒时填写。留空表示只显示读数，不判断是否超出范围。",
                             "placeholder": "例如 300"
                         },
                         {
                             "key": "app_config.light_alert_when",
-                            "label": "光照告警方向",
+                            "label": "光照提醒方向",
                             "type": "select",
-                            "description": "仅表示数值比较方向，不代表物理明暗已标定。",
+                            "description": "选择低于还是高于设定值时提醒。这里只比较读数，不代表环境一定变暗或变亮。",
                             "enum": [
                                 "below",
                                 "above"
                             ],
-                            "default": "below"
+                            "default": "below",
+                            "values": {
+                                "below": "低于设定值时提醒",
+                                "above": "高于设定值时提醒"
+                            }
                         },
                         {
                             "key": "app_config.hysteresis.temperature",
-                            "label": "温度回差",
+                            "label": "温度恢复缓冲",
                             "type": "number",
-                            "description": "恢复区间宽度；必须小于温度上下限差的一半。",
+                            "description": "温度回到正常范围前需要越过的缓冲值，避免边界附近反复提醒。",
                             "minimum": 0,
                             "default": 1
                         },
                         {
                             "key": "app_config.hysteresis.light",
-                            "label": "光照回差",
+                            "label": "光照恢复缓冲",
                             "type": "number",
-                            "description": "与光照原始读数同单位。",
+                            "description": "光照回到正常范围前需要越过的缓冲值，使用与光照读数相同的单位。",
                             "minimum": 0,
                             "default": 5
                         },
                         {
                             "key": "app_config.stale_after_s",
-                            "label": "过期时间（秒）",
+                            "label": "多久没有新数据就标记为过期（秒）",
                             "type": "integer",
-                            "description": "超过该时间没有新观测时标记为过期。",
+                            "description": "超过这段时间没有收到新读数，页面会显示数据已过期。",
                             "minimum": 60,
                             "maximum": 86400,
                             "default": 120
@@ -128,19 +211,23 @@ UI = {
                             "key": "app_config.temperature_unit",
                             "label": "温度单位",
                             "type": "string",
-                            "description": "可选；缺失单位时的回退值，不做换算。",
+                            "description": "传感器没有提供单位时使用，例如 C 或 °C。应用不会换算温度。",
                             "placeholder": "例如 C"
                         },
                         {
                             "key": "app_config.light_unit",
                             "label": "光照单位",
                             "type": "string",
-                            "description": "可选；缺失单位时的回退值，不做换算。",
+                            "description": "传感器没有提供单位时使用，例如 lux。应用不会换算光照。",
                             "placeholder": "例如 lux"
                         }
-                    ]
+                    ],
+                    "title": "提醒设置",
+                    "description": "设置温度范围、光照提醒和读数过期时间。",
+                    "emptyText": "暂无设置项。"
                 }
-            ]
+            ],
+            "description": "查看温度和光照是否在设定范围内，并了解最近一次变化。"
         }
     ]
 }
@@ -163,7 +250,7 @@ def parse(text):
 def validate(value):
     expected = {
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
-        "kind": "Application", "id": PLUGIN_ID, "version": "0.1.2",
+        "kind": "Application", "id": PLUGIN_ID, "version": "0.1.3",
         "protocol": 1, "entrypoint": ENTRYPOINT,
         "compatibility": {"core": ">=0.2.15 <0.3.0"},
         "permissions": {"hardware": [], "network": [], "filesystem": [], "secrets": []},
