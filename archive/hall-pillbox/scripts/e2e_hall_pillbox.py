@@ -852,10 +852,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--base-url", default=os.environ.get("CLOUDPATH_BASE_URL", DEFAULT_BASE_URL))
     parser.add_argument(
         "--credentials-file",
-        default=os.environ.get(
-            "CLOUDPATH_CREDENTIALS_FILE",
-            str(Path.home() / ".config" / "server-secrets" / "cloudpath.env"),
-        ),
+        default=os.environ.get("CLOUDPATH_CREDENTIALS_FILE", ""),
     )
     parser.add_argument("--device", default=os.environ.get("CLOUDPATH_E2E_DEVICE", DEFAULT_DEVICE))
     parser.add_argument("--app-edge", default=os.environ.get("CLOUDPATH_E2E_APP_EDGE", DEFAULT_APP_EDGE))
