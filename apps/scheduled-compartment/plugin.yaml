@@ -102,16 +102,67 @@ contributes:
                     format: time
                     hideWhenEmpty: true
               - type: schedule
-                source: records
-                recordType: window
+                # Core's current schedule contract accepts records or an omitted source.
+                # The renderer reads jobs.scheduled, so omitting source avoids a false records claim.
                 title: 自动提醒计划
                 description: 查看每天自动提醒取药的时间，以及下一次提醒。
                 emptyText: 还没有设置自动提醒计划。
               - type: form
                 source: config
                 title: 提醒设置
-                description: 设置提醒使用的时区和声音。
+                description: 配置药格、每日提醒计划、时区和提醒声音。
                 fields:
+                  - key: app_config.compartments
+                    label: 药格列表
+                    type: array
+                    description: 至少配置一个药格；数组顺序就是按键映射顺序。
+                    required: true
+                    minItems: 1
+                    itemFields:
+                      - key: id
+                        label: 药格 ID
+                        type: string
+                        description: 稳定标识，供 schedule[].compartment 引用；同一实例内必须唯一，建议使用 medicine 这类英文标识。
+                        placeholder: medicine
+                        required: true
+                      - key: name
+                        label: 显示名称
+                        type: string
+                        description: 可留空；用于页面和提醒文案。
+                        placeholder: 取药
+                  - key: app_config.schedule
+                    label: 每日提醒计划
+                    type: array
+                    description: 至少添加一个窗口；开始和结束时间使用 24 小时制 HH:MM，按上方时区解释。
+                    required: true
+                    minItems: 1
+                    itemFields:
+                      - key: id
+                        label: 计划 ID
+                        type: string
+                        description: 每个窗口的唯一标识，例如 morning。
+                        placeholder: morning
+                        required: true
+                      - key: compartment
+                        label: 药格 ID
+                        type: string
+                        description: 必须引用上方 compartments[].id 中已配置的值，例如 medicine。
+                        placeholder: medicine
+                        required: true
+                      - key: start
+                        label: 开始时间
+                        type: string
+                        description: 24 小时制 HH:MM，例如 08:00。
+                        placeholder: "08:00"
+                        required: true
+                        pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+                      - key: end
+                        label: 结束时间
+                        type: string
+                        description: 24 小时制 HH:MM，必须晚于开始时间；不支持跨午夜。
+                        placeholder: "08:30"
+                        required: true
+                        pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
                   - key: app_config.timezone
                     label: 时区
                     type: string

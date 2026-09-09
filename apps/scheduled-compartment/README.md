@@ -10,7 +10,7 @@
 
 ## WebUI 贡献
 
-`plugin.yaml` 声明 `ui.apiVersion: 1`，Core 会为已启用的药盒实例生成导航“药盒提醒”和独立路由 `/apps/pillbox`。页面由通用 section 组成：实例状态、来自 `window` 记录的指标、手动操作、`window` 记录时间线、计划和配置表单；`start-reminder`、`confirm-window` 只作为手动动作展示。表单覆盖时区和提醒音档位；药格/日程数组与显示参数仍保留在高级详情。
+`plugin.yaml` 声明 `ui.apiVersion: 1`，Core 会为已启用的药盒实例生成导航“药盒提醒”和独立路由 `/apps/pillbox`。页面由通用 section 组成：实例状态、来自 `window` 记录的指标、手动操作、`window` 记录时间线、来自 `jobs.scheduled` 的计划（Core 当前只允许 schedule section 声明 `records` 或空 source，因此 manifest 省略 source）和配置表单；`start-reminder`、`confirm-window` 只作为手动动作展示。表单覆盖药格数组、每日计划、时区和提醒音档位；显示参数仍保留在高级详情。
 
 ## 1. 选择按键和配置
 

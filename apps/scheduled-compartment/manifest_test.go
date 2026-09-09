@@ -124,9 +124,24 @@ func TestManifestUIContribution(t *testing.T) {
 		"              - type: metrics\n                source: records\n                recordType: window",
 		"              - type: actions\n                source: manual-jobs",
 		"              - type: records\n                source: records\n                recordType: window\n                presentation: timeline",
-		"              - type: schedule\n                source: records\n                recordType: window",
+		"              - type: schedule",
 		"              - type: form\n                source: config",
 		"                fields:",
+		"                  - key: app_config.compartments",
+		"                    type: array",
+		"                    minItems: 1",
+		"                    itemFields:",
+		"                      - key: id",
+		"                      - key: name",
+		"                  - key: app_config.schedule",
+		"                        label: 药格 ID",
+		"                        description: 必须引用上方 compartments[].id 中已配置的值，例如 medicine。",
+		"                      - key: start",
+		"                        label: 开始时间",
+		"                        placeholder: \"08:00\"",
+		"                      - key: end",
+		"                        label: 结束时间",
+		"                        placeholder: \"08:30\"",
 		"                  - key: app_config.timezone",
 		"                  - key: app_config.reminder.freq",
 		"                  - key: app_config.reminder.duration",
@@ -134,6 +149,18 @@ func TestManifestUIContribution(t *testing.T) {
 		if !strings.Contains(m, want) {
 			t.Fatalf("plugin.yaml missing UI contract %q", want)
 		}
+	}
+	scheduleStart := strings.Index(m, "              - type: schedule")
+	formStart := -1
+	if scheduleStart >= 0 {
+		formStart = strings.Index(m[scheduleStart:], "              - type: form")
+	}
+	if scheduleStart < 0 || formStart < 0 {
+		t.Fatal("schedule/form section boundary missing")
+	}
+	scheduleBlock := m[scheduleStart : scheduleStart+formStart]
+	if strings.Contains(scheduleBlock, "\n                source:") || strings.Contains(scheduleBlock, "\n                recordType:") {
+		t.Fatal("schedule section must omit source/recordType until Core accepts jobs")
 	}
 	if strings.Contains(m, "type: custom") {
 		t.Fatal("scheduled-compartment must use declarative sections, not arbitrary custom UI")
