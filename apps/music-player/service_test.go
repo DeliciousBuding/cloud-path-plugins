@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -237,6 +238,8 @@ func requestCommands(effects []*application.ApplicationEffect) []*application.Re
 	return commands
 }
 
+const musicPlayerUIJSON = `{"apiVersion":1,"navigation":{"title":"音乐播放器","icon":"music","order":50,"route":"music","visibility":"instance-enabled"},"pages":[{"id":"home","title":"音乐播放器","sections":[{"type":"status","source":"instance"},{"type":"actions","source":"manual-jobs"},{"type":"records","source":"records","recordType":"playback","presentation":"timeline"}]}]}`
+
 func TestDescriptorAndManifestIdentity(t *testing.T) {
 	svc := New()
 	desc, err := svc.Describe(context.Background())
@@ -279,6 +282,32 @@ func TestDescriptorAndManifestIdentity(t *testing.T) {
 	requirements := readJSONFile(t, "requirements.yaml")["requirements"].([]any)
 	if len(requirements) != 3 {
 		t.Fatalf("requirements mirror = %+v", requirements)
+	}
+	contributes, ok := manifest["contributes"].(map[string]any)
+	if !ok {
+		t.Fatalf("manifest contributes = %#v", manifest["contributes"])
+	}
+	applications, ok := contributes["applications"].([]any)
+	if !ok || len(applications) != 1 {
+		t.Fatalf("manifest applications = %#v", contributes["applications"])
+	}
+	application, ok := applications[0].(map[string]any)
+	if !ok {
+		t.Fatalf("manifest application = %#v", applications[0])
+	}
+	uiBytes, err := json.Marshal(application["ui"])
+	if err != nil {
+		t.Fatalf("marshal UI contribution: %v", err)
+	}
+	var gotUI, wantUI any
+	if err := json.Unmarshal(uiBytes, &gotUI); err != nil {
+		t.Fatalf("invalid UI contribution: %v", err)
+	}
+	if err := json.Unmarshal([]byte(musicPlayerUIJSON), &wantUI); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(gotUI, wantUI) {
+		t.Fatalf("UI contribution drift: %#v", gotUI)
 	}
 }
 

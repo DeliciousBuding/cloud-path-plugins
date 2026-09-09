@@ -22,6 +22,27 @@ REQUIREMENTS = [
 ]
 
 
+UI = {
+    "apiVersion": 1,
+    "navigation": {
+        "title": "音乐播放器",
+        "icon": "music",
+        "order": 50,
+        "route": "music",
+        "visibility": "instance-enabled",
+    },
+    "pages": [{
+        "id": "home",
+        "title": "音乐播放器",
+        "sections": [
+            {"type": "status", "source": "instance"},
+            {"type": "actions", "source": "manual-jobs"},
+            {"type": "records", "source": "records", "recordType": "playback", "presentation": "timeline"},
+        ],
+    }],
+}
+
+
 def unique_object(pairs):
     result = {}
     for key, value in pairs:
@@ -43,7 +64,7 @@ def validate(value):
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
         "kind": "Application",
         "id": PLUGIN_ID,
-        "version": "0.2.0",
+        "version": "0.2.1",
         "protocol": 1,
         "entrypoint": ENTRYPOINT,
         "compatibility": {"core": ">=0.2.15 <0.3.0"},
@@ -67,8 +88,10 @@ def validate(value):
         apps = contributions["applications"]
         if not isinstance(apps, list) or len(apps) != 1 or not isinstance(apps[0], dict):
             errors.append("exactly one application contribution is required")
-        elif set(apps[0]) != {"id", "title"} or apps[0].get("id") != "music-player" or not isinstance(apps[0].get("title"), str) or not apps[0]["title"].strip():
+        elif set(apps[0]) != {"id", "title", "ui"} or apps[0].get("id") != "music-player" or not isinstance(apps[0].get("title"), str) or not apps[0].get("title", "").strip():
             errors.append("application contribution identity/title is invalid")
+        elif apps[0].get("ui") != UI:
+            errors.append("application UI contribution is invalid")
     return errors
 
 
@@ -98,7 +121,7 @@ def validate_tree(root, value):
                 errors.append(f"non-public import in {relative}: {name}")
             if name.startswith(CORE + "/") and not name.startswith(CORE + "/sdk/go/"):
                 errors.append(f"non-SDK Core import in {relative}: {name}")
-    if "Version **0.2.0**" not in (root / "README.md").read_text(encoding="utf-8"):
+    if "Version **0.2.1**" not in (root / "README.md").read_text(encoding="utf-8"):
         errors.append("README.md version does not match the manifest")
     return errors
 
@@ -124,6 +147,9 @@ def self_test(root):
             pass
         else:
             raise AssertionError("accepted malformed/ambiguous JSON")
+    bad_ui = copy.deepcopy(base)
+    bad_ui["contributes"]["applications"][0]["ui"]["navigation"]["route"] = "bad/route"
+    assert validate(bad_ui), "accepted invalid UI route"
     assert list(imports('package sample\nimport "x/internal/y"')) == ["x/internal/y"]
     print("manifest validator self-test OK")
 

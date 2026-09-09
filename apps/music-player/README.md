@@ -4,9 +4,13 @@
 把内置歌曲每轮重复压成一条 `tone-sequence` 命令，把单音压成一条 `tone` 命令，并维护当前 `music_session` 状态。
 它不直接访问串口、浏览器、烧录工具或现网配置，只使用 Core 绑定后提供的实体 ID。
 
-Version **0.2.0**；需要 Core `>=0.2.15 <0.3.0` 和公开 Go SDK v0.2.15。
+Version **0.2.1**；需要 Core `>=0.2.15 <0.3.0` 和公开 Go SDK v0.2.15。
 状态：`IMPLEMENTED`。仓库测试使用 fake event stream / fake effect writer，
 不是真板或现场验收证据。
+
+## Web UI 贡献
+
+Manifest 声明 `ui.apiVersion: 1`，安装并启用实例后注册导航“音乐播放器”和独立路由 `/apps/music`。首页由 Core 白名单 section 渲染：播放会话状态、`play-song` / `play-note` 手动操作和播放时间线；不注入 JavaScript、HTML 或远程资源。
 
 ## Capability requirements
 
@@ -24,7 +28,7 @@ Version **0.2.0**；需要 Core `>=0.2.15 <0.3.0` 和公开 Go SDK v0.2.15。
 
 ## Configuration
 
-版本 0.2.0 没有业务配置字段。`app_config` 必须是空 JSON object：
+版本 0.2.1 没有业务配置字段。`app_config` 必须是空 JSON object：
 
 ```json
 {}
@@ -115,7 +119,7 @@ Driver 收到后在本机按序执行；当序列精确匹配内置曲目时走�
 
 - 应用只依赖公开 SDK；没有 Driver ID、串口、COM3、Edge 启动、烧录或现网配置写入。
 - `sound` 是唯一必需输出；可选 `local-display` / `indicator` 缺失不阻止播放。
-- 0.2.0 不猜测 `display-text@1` 或 `led@1` 的 action/args 协议，因此即使绑定存在，
+- 0.2.1 不猜测 `display-text@1` 或 `led@1` 的 action/args 协议，因此即使绑定存在，
   当前版本也不会发送显示或 LED 命令；绑定可用性会出现在状态记录中。
 - 不保证“命令已提交”等于“硬件已发声”；只有最终 `RequestCompleted` 才改变状态。
 - 插件进程重启后，内存中的会话和幂等缓存不会自动恢复；`runtime_state_persistent=false`
@@ -140,7 +144,7 @@ python3 scripts/validate_manifest.py --self-test
 
 ## 后续 LED / display 扩展点
 
-版本 0.2.0 已接受并保留两个可选绑定，但没有假定其硬件语义。后续版本可以在不改变
+版本 0.2.1 已接受并保留两个可选绑定，但没有假定其硬件语义。后续版本可以在不改变
 `tone` 契约的前提下增加：
 
 - `local-display`：把 `queued`、`playing`、`completed`、`failed` 映射为明确的

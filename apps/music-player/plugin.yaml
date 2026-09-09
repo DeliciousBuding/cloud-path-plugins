@@ -2,7 +2,7 @@
   "apiVersion": "plugins.cloudpath.dev/v1alpha1",
   "kind": "Application",
   "id": "io.github.deliciousbuding.cloud-path-app-music-player",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "protocol": 1,
   "entrypoint": "cloud-path-app-music-player",
   "compatibility": {
@@ -35,7 +35,39 @@
     "applications": [
       {
         "id": "music-player",
-        "title": "音乐播放器"
+        "title": "音乐播放器",
+        "ui": {
+          "apiVersion": 1,
+          "navigation": {
+            "title": "音乐播放器",
+            "icon": "music",
+            "order": 50,
+            "route": "music",
+            "visibility": "instance-enabled"
+          },
+          "pages": [
+            {
+              "id": "home",
+              "title": "音乐播放器",
+              "sections": [
+                {
+                  "type": "status",
+                  "source": "instance"
+                },
+                {
+                  "type": "actions",
+                  "source": "manual-jobs"
+                },
+                {
+                  "type": "records",
+                  "source": "records",
+                  "recordType": "playback",
+                  "presentation": "timeline"
+                }
+              ]
+            }
+          ]
+        }
       }
     ]
   }

@@ -18,7 +18,7 @@ import (
 // Manifest identity. These values must mirror plugin.yaml.
 const (
 	pluginIDValue = "io.github.deliciousbuding.cloud-path-app-music-player"
-	pluginVersion = "0.2.0"
+	pluginVersion = "0.2.1"
 
 	soundRequirement     = "sound"
 	displayRequirement   = "local-display"
