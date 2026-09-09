@@ -17,7 +17,7 @@ import (
 // Manifest identity. These values must mirror plugin.yaml.
 const (
 	pluginIDValue    = "io.github.deliciousbuding.cloud-path-app-scheduled-compartment"
-	pluginVersion    = "0.2.8"
+	pluginVersion    = "0.2.9"
 	jobWindowCheck   = "window-check"
 	jobStartReminder = "start-reminder"
 	jobConfirmWindow = "confirm-window"
