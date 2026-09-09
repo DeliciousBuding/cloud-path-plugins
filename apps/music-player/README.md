@@ -1,10 +1,10 @@
 # cloud-path-app-music-player
 
 一个软件-only 的 CloudPath **Application 插件**，通过公开 Application SDK
-把歌曲或单音拆成按顺序排列的 `tone` 命令，并维护当前 `music_session` 状态。
+把内置歌曲每轮重复压成一条 `tone-sequence` 命令，把单音压成一条 `tone` 命令，并维护当前 `music_session` 状态。
 它不直接访问串口、浏览器、烧录工具或现网配置，只使用 Core 绑定后提供的实体 ID。
 
-Version **0.1.0**；需要 Core `>=0.2.15 <0.3.0` 和公开 Go SDK v0.2.15。
+Version **0.2.0**；需要 Core `>=0.2.15 <0.3.0` 和公开 Go SDK v0.2.15。
 状态：`IMPLEMENTED`。仓库测试使用 fake event stream / fake effect writer，
 不是真板或现场验收证据。
 
@@ -12,7 +12,7 @@ Version **0.1.0**；需要 Core `>=0.2.15 <0.3.0` 和公开 Go SDK v0.2.15。
 
 | Requirement | Capability | Cardinality | 用途 |
 |---|---|---|---|
-| `sound` | `cloudpath.dev/capability/buzzer@1` | `one` | 必须绑定；所有 `tone` 命令都发往这个实体 |
+| `sound` | `cloudpath.dev/capability/buzzer@1` | `one` | 必须绑定；所有 `tone` / `tone-sequence` 命令都发往这个实体 |
 | `local-display` | `cloudpath.dev/capability/display-text@1` | `zero-or-one` | 可选；当前版本只记录绑定可用性，为后续显示状态保留扩展点 |
 | `indicator` | `cloudpath.dev/capability/led@1` | `zero-or-one` | 可选；当前版本只记录绑定可用性，为后续播放状态指示保留扩展点 |
 
@@ -24,7 +24,7 @@ Version **0.1.0**；需要 Core `>=0.2.15 <0.3.0` 和公开 Go SDK v0.2.15。
 
 ## Configuration
 
-版本 0.1.0 没有业务配置字段。`app_config` 必须是空 JSON object：
+版本 0.2.0 没有业务配置字段。`app_config` 必须是空 JSON object：
 
 ```json
 {}
@@ -64,22 +64,23 @@ Version **0.1.0**；需要 Core `>=0.2.15 <0.3.0` 和公开 Go SDK v0.2.15。
 
 ## 播放契约
 
-对 `play-song`，应用按曲目定义的音符顺序展开 `repeat` 次；对 `play-note`，
-只生成一个音符。一个实例同一时间只维护一个 `queued` / `playing` 会话；
-上一会话完成或失败前，新的播放 job 会返回 `FAILED_PRECONDITION`，避免旧命令
-仍在 Driver 队列中却失去应用侧状态。每个音符都是一个 `RequestCommand`：
+对 `play-song`，应用按曲目定义的音符顺序展开 `repeat` 次，每一轮重复生成
+一条 `tone-sequence` 命令；对 `play-note`，只生成一个 `tone` 音符命令。
+一个实例同一时间只维护一个 `queued` / `playing` 会话；上一会话完成或失败前，
+新的播放 job 会返回 `FAILED_PRECONDITION`。`tone-sequence` 的 Driver 侧契约是：
 
 ```json
 {
-  "action": "tone",
-  "args_json": "{\"frequency_hz\":440,\"duration_ms\":100}",
-  "idempotency_key": "music-<session>:note:<index>"
+  "action": "tone-sequence",
+  "args_json": "{\"notes\":[{\"frequency_hz\":262,\"duration_ms\":300}, ...]}",
+  "idempotency_key": "music-<session>:seq:<repeat-index>"
 }
 ```
 
-应用每次只提交**一个**在途音符，收到成功 `RequestCompleted` 后才提交下一个；
-因此不会把整首歌一次性塞进 Driver 队列。任一音符失败/超时/取消后，会话进入
-`failed`，后续音符不再提交。应用**不会**在 `RunJob` 或事件处理里 sleep 阻塞，
+Driver 收到后在本机按序执行；当序列精确匹配内置曲目时走固件 `song` 原生
+音序器，否则回退为逐音 `beep`。应用每次只提交**一条**在途命令，收到成功
+`RequestCompleted` 后才提交下一轮重复；任一命令失败/超时/取消后，会话进入
+`failed`，后续命令不再提交。应用**不会**在 `RunJob` 或事件处理里 sleep 阻塞，
 也不直接操作硬件。
 
 ## `music_session` domain record
@@ -108,13 +109,13 @@ Version **0.1.0**；需要 Core `>=0.2.15 <0.3.0` 和公开 Go SDK v0.2.15。
 重试时，`RunJob` 返回第一次的结果，不重复发送 domain record 或 `tone` 命令。
 同一个 key 携带不同 job 或不同 args 会被拒绝。该缓存是当前插件进程的内存状态，
 不是跨进程持久化存储；Core 重试仍应携带稳定 key，并由 Core/Driver 的命令幂等
-机制共同保证端到端不重复。每个音符的命令 key 在会话内确定且唯一。
+机制共同保证端到端不重复。每一轮重复的 `tone-sequence` 命令 key 在会话内确定且唯一。
 
 ## 边界与降级
 
 - 应用只依赖公开 SDK；没有 Driver ID、串口、COM3、Edge 启动、烧录或现网配置写入。
 - `sound` 是唯一必需输出；可选 `local-display` / `indicator` 缺失不阻止播放。
-- 0.1.0 不猜测 `display-text@1` 或 `led@1` 的 action/args 协议，因此即使绑定存在，
+- 0.2.0 不猜测 `display-text@1` 或 `led@1` 的 action/args 协议，因此即使绑定存在，
   当前版本也不会发送显示或 LED 命令；绑定可用性会出现在状态记录中。
 - 不保证“命令已提交”等于“硬件已发声”；只有最终 `RequestCompleted` 才改变状态。
 - 插件进程重启后，内存中的会话和幂等缓存不会自动恢复；`runtime_state_persistent=false`
@@ -139,7 +140,7 @@ python3 scripts/validate_manifest.py --self-test
 
 ## 后续 LED / display 扩展点
 
-版本 0.1.0 已接受并保留两个可选绑定，但没有假定其硬件语义。后续版本可以在不改变
+版本 0.2.0 已接受并保留两个可选绑定，但没有假定其硬件语义。后续版本可以在不改变
 `tone` 契约的前提下增加：
 
 - `local-display`：把 `queued`、`playing`、`completed`、`failed` 映射为明确的

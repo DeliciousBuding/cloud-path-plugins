@@ -43,7 +43,7 @@ def validate(value):
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
         "kind": "Application",
         "id": PLUGIN_ID,
-        "version": "0.1.0",
+        "version": "0.2.0",
         "protocol": 1,
         "entrypoint": ENTRYPOINT,
         "compatibility": {"core": ">=0.2.15 <0.3.0"},
@@ -98,7 +98,7 @@ def validate_tree(root, value):
                 errors.append(f"non-public import in {relative}: {name}")
             if name.startswith(CORE + "/") and not name.startswith(CORE + "/sdk/go/"):
                 errors.append(f"non-SDK Core import in {relative}: {name}")
-    if "Version **0.1.0**" not in (root / "README.md").read_text(encoding="utf-8"):
+    if "Version **0.2.0**" not in (root / "README.md").read_text(encoding="utf-8"):
         errors.append("README.md version does not match the manifest")
     return errors
 

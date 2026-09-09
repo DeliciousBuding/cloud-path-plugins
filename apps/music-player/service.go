@@ -18,7 +18,7 @@ import (
 // Manifest identity. These values must mirror plugin.yaml.
 const (
 	pluginIDValue = "io.github.deliciousbuding.cloud-path-app-music-player"
-	pluginVersion = "0.1.0"
+	pluginVersion = "0.2.0"
 
 	soundRequirement     = "sound"
 	displayRequirement   = "local-display"
@@ -28,7 +28,8 @@ const (
 	displayCapability = "cloudpath.dev/capability/display-text@1"
 	indicatorCap      = "cloudpath.dev/capability/led@1"
 
-	toneAction = "tone"
+	toneAction         = "tone"
+	toneSequenceAction = "tone-sequence"
 )
 
 const (
@@ -53,10 +54,12 @@ const (
 )
 
 type sessionCommand struct {
-	Key   string
-	Index int
-	Note  Note
-	State string
+	Key            string
+	Action         string
+	ArgsJSON       string
+	Notes          []Note
+	StartNoteIndex int
+	State          string
 }
 
 type musicSession struct {

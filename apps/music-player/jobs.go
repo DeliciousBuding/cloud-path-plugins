@@ -32,6 +32,11 @@ type playNoteArgs struct {
 	DurationMS  int `json:"duration_ms"`
 }
 
+type playSequenceArgs struct {
+	Notes []Note `json:"notes"`
+	GapMS int    `json:"gap_ms,omitempty"`
+}
+
 type emptyArgs struct{}
 
 func jobDescriptors() []application.JobDescriptor {
@@ -208,13 +213,25 @@ func (s *Service) RunJob(ctx context.Context, req *application.RunJobRequest) (*
 			TotalNotes: len(notes) * repeat,
 			Commands:   map[string]*sessionCommand{},
 		}
-		index := 0
 		for repetition := 0; repetition < repeat; repetition++ {
-			for _, note := range notes {
-				index++
-				key := requestID + ":note:" + strconv.Itoa(index)
-				session.CommandOrder = append(session.CommandOrder, key)
-				session.Commands[key] = &sessionCommand{Key: key, Index: index, Note: note, State: commandQueued}
+			startNoteIndex := repetition*len(notes) + 1
+			commandNotes := append([]Note(nil), notes...)
+			action := toneSequenceAction
+			argsJSON := mustJSON(playSequenceArgs{Notes: commandNotes})
+			key := requestID + ":seq:" + strconv.Itoa(repetition+1)
+			if req.JobID == jobPlayNote {
+				action = toneAction
+				argsJSON = mustJSON(commandNotes[0])
+				key = requestID + ":note:1"
+			}
+			session.CommandOrder = append(session.CommandOrder, key)
+			session.Commands[key] = &sessionCommand{
+				Key:            key,
+				Action:         action,
+				ArgsJSON:       argsJSON,
+				Notes:          commandNotes,
+				StartNoteIndex: startNoteIndex,
+				State:          commandQueued,
 			}
 		}
 		st.session = session
@@ -225,7 +242,7 @@ func (s *Service) RunJob(ctx context.Context, req *application.RunJobRequest) (*
 			return nil, status.Errorf(status.CodeFailedPrecondition, "song has no notes")
 		}
 		session.NextIndex = 1
-		effects = append(effects, toneCommand(sound, session.Commands[session.CommandOrder[0]]))
+		effects = append(effects, requestCommand(sound, session.Commands[session.CommandOrder[0]]))
 	}
 	s.mu.Unlock()
 

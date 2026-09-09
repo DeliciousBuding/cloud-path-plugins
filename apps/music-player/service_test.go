@@ -282,7 +282,7 @@ func TestDescriptorAndManifestIdentity(t *testing.T) {
 	}
 }
 
-func TestPlaySongQueuesFirstToneAndRecord(t *testing.T) {
+func TestPlaySongQueuesOneSequenceCommandAndRecord(t *testing.T) {
 	h := newHarness(t, testBindings)
 	response, err := h.run(jobPlaySong, `{"song":"little-star","repeat":1}`, "song-1")
 	if err != nil || !response.Status.IsOK() {
@@ -293,18 +293,23 @@ func TestPlaySongQueuesFirstToneAndRecord(t *testing.T) {
 	effects := h.writer.waitFor(t, 2)
 	commands := requestCommands(effects)
 	if len(commands) != 1 {
-		t.Fatalf("tone commands = %d, want exactly one in-flight command", len(commands))
+		t.Fatalf("sequence commands = %d, want exactly one in-flight command", len(commands))
 	}
 	command := commands[0]
-	if command.Action != toneAction || command.EntityID != testBindings[0].EntityID || command.IdempotencyKey == "" {
+	if command.Action != toneSequenceAction || command.EntityID != testBindings[0].EntityID || command.IdempotencyKey == "" {
 		t.Fatalf("command = %+v", command)
 	}
-	var got Note
+	var got playSequenceArgs
 	if err := json.Unmarshal([]byte(command.ArgsJSON), &got); err != nil {
 		t.Fatalf("decode command args: %v", err)
 	}
-	if got != notes[0] {
-		t.Fatalf("first command note = %+v, want %+v", got, notes[0])
+	if len(got.Notes) != len(notes) || got.GapMS != 0 {
+		t.Fatalf("sequence args = %+v, want %d notes", got, len(notes))
+	}
+	for index := range notes {
+		if got.Notes[index] != notes[index] {
+			t.Fatalf("sequence note %d = %+v, want %+v", index, got.Notes[index], notes[index])
+		}
 	}
 
 	record := lastSessionRecord(t, effects)
@@ -376,7 +381,7 @@ func TestPlayNoteBoundsAndValidation(t *testing.T) {
 
 func TestRequestCompletedAdvancesAndCompletesSession(t *testing.T) {
 	h := newHarness(t, testBindings)
-	response, err := h.run(jobPlaySong, `{"song":"ode-to-joy","repeat":1}`, "complete-song")
+	response, err := h.run(jobPlaySong, `{"song":"ode-to-joy","repeat":2}`, "complete-song")
 	if err != nil || !response.Status.IsOK() {
 		t.Fatalf("RunJob: %+v, %v", response, err)
 	}
@@ -386,56 +391,63 @@ func TestRequestCompletedAdvancesAndCompletesSession(t *testing.T) {
 	if len(commands) != 1 {
 		t.Fatalf("initial commands = %d, want 1", len(commands))
 	}
-
-	for index := range notes {
-		command := commands[len(commands)-1]
-		var got Note
-		if err := json.Unmarshal([]byte(command.ArgsJSON), &got); err != nil {
-			t.Fatalf("decode command %d: %v", index, err)
-		}
-		if got != notes[index] {
-			t.Fatalf("command %d note = %+v, want %+v", index, got, notes[index])
-		}
-
-		before := h.writer.count()
-		h.send(&application.RequestCompleted{
-			RequestID: command.IdempotencyKey,
-			EntityID:  testBindings[0].EntityID,
-			Action:    toneAction,
-			State:     application.CommandStateSucceeded,
-		})
-		wantEffects := before + 1
-		if index < len(notes)-1 {
-			wantEffects = before + 2
-		}
-		effects = h.writer.waitFor(t, wantEffects)
-		record := lastSessionRecord(t, effects)
-		wantStatus := statusPlaying
-		if index == len(notes)-1 {
-			wantStatus = statusCompleted
-		}
-		if record["status"] != wantStatus || record["completed_notes"] != float64(index+1) {
-			t.Fatalf("completion %d record = %+v", index, record)
-		}
-		lastNote, ok := record["last_note"].(map[string]any)
-		if !ok || lastNote["index"] != float64(index+1) {
-			t.Fatalf("last_note after completion %d = %+v", index, record["last_note"])
-		}
-		if index < len(notes)-1 {
-			commands = requestCommands(effects)
-			next := commands[len(commands)-1]
-			if next.IdempotencyKey == command.IdempotencyKey {
-				t.Fatalf("completion %d did not advance to a new command", index)
-			}
-		}
+	if got := h.commandKeys(); len(got) != 2 {
+		t.Fatalf("command order = %v, want one command per repetition", got)
 	}
 
-	command := commands[len(commands)-1]
+	first := commands[0]
+	var firstArgs playSequenceArgs
+	if err := json.Unmarshal([]byte(first.ArgsJSON), &firstArgs); err != nil {
+		t.Fatalf("decode first sequence: %v", err)
+	}
+	if len(firstArgs.Notes) != len(notes) {
+		t.Fatalf("first sequence notes = %d, want %d", len(firstArgs.Notes), len(notes))
+	}
+
 	before := h.writer.count()
 	h.send(&application.RequestCompleted{
-		RequestID: command.IdempotencyKey,
+		RequestID: first.IdempotencyKey,
 		EntityID:  testBindings[0].EntityID,
-		Action:    toneAction,
+		Action:    toneSequenceAction,
+		State:     application.CommandStateSucceeded,
+	})
+	effects = h.writer.waitFor(t, before+2)
+	record := lastSessionRecord(t, effects)
+	if record["status"] != statusPlaying || record["completed_notes"] != float64(len(notes)) {
+		t.Fatalf("after first repetition record = %+v", record)
+	}
+	lastNote, ok := record["last_note"].(map[string]any)
+	if !ok || lastNote["index"] != float64(len(notes)) {
+		t.Fatalf("last_note after first repetition = %+v", record["last_note"])
+	}
+	commands = requestCommands(effects)
+	second := commands[len(commands)-1]
+	if second.IdempotencyKey == first.IdempotencyKey {
+		t.Fatal("completion did not advance to the next repetition")
+	}
+
+	before = h.writer.count()
+	h.send(&application.RequestCompleted{
+		RequestID: second.IdempotencyKey,
+		EntityID:  testBindings[0].EntityID,
+		Action:    toneSequenceAction,
+		State:     application.CommandStateSucceeded,
+	})
+	effects = h.writer.waitFor(t, before+1)
+	record = lastSessionRecord(t, effects)
+	if record["status"] != statusCompleted || record["completed_notes"] != float64(len(notes)*2) {
+		t.Fatalf("completed record = %+v", record)
+	}
+	lastNote, ok = record["last_note"].(map[string]any)
+	if !ok || lastNote["index"] != float64(len(notes)*2) {
+		t.Fatalf("final last_note = %+v", record["last_note"])
+	}
+
+	before = h.writer.count()
+	h.send(&application.RequestCompleted{
+		RequestID: second.IdempotencyKey,
+		EntityID:  testBindings[0].EntityID,
+		Action:    toneSequenceAction,
 		State:     application.CommandStateSucceeded,
 	})
 	time.Sleep(20 * time.Millisecond)
@@ -480,9 +492,9 @@ func TestRequestCompletedFailureAndNonTerminalStates(t *testing.T) {
 	}
 }
 
-func TestToneFailureDoesNotQueueNextNote(t *testing.T) {
+func TestToneFailureDoesNotQueueNextRepetition(t *testing.T) {
 	h := newHarness(t, testBindings)
-	response, err := h.run(jobPlaySong, `{"song":"little-star","repeat":1}`, "stop-on-failure")
+	response, err := h.run(jobPlaySong, `{"song":"little-star","repeat":3}`, "stop-on-failure")
 	if err != nil || !response.Status.IsOK() {
 		t.Fatalf("RunJob: %+v, %v", response, err)
 	}
@@ -492,7 +504,7 @@ func TestToneFailureDoesNotQueueNextNote(t *testing.T) {
 	h.send(&application.RequestCompleted{
 		RequestID:  command.IdempotencyKey,
 		EntityID:   testBindings[0].EntityID,
-		Action:     toneAction,
+		Action:     toneSequenceAction,
 		State:      application.CommandStateFailed,
 		ErrorCode:  "DEVICE_REJECTED",
 		ResultJSON: `{"detail":"badarg"}`,
@@ -504,7 +516,7 @@ func TestToneFailureDoesNotQueueNextNote(t *testing.T) {
 	}
 	time.Sleep(20 * time.Millisecond)
 	if got := h.writer.count(); got != before+1 {
-		t.Fatalf("failure queued a subsequent note: effects=%d, want %d", got, before+1)
+		t.Fatalf("failure queued a subsequent repetition: effects=%d, want %d", got, before+1)
 	}
 }
 
@@ -522,7 +534,7 @@ func TestTerminalRequestCompletedFailsSessionAndStopsSequence(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			h := newHarness(t, testBindings)
-			response, err := h.run(jobPlaySong, `{"song":"little-star","repeat":1}`, "terminal-"+test.name)
+			response, err := h.run(jobPlaySong, `{"song":"little-star","repeat":3}`, "terminal-"+test.name)
 			if err != nil || !response.Status.IsOK() {
 				t.Fatalf("RunJob: %+v, %v", response, err)
 			}
@@ -530,11 +542,11 @@ func TestTerminalRequestCompletedFailsSessionAndStopsSequence(t *testing.T) {
 			effects := h.writer.waitFor(t, 2)
 			commands := requestCommands(effects)
 			if len(commands) != 1 {
-				t.Fatalf("initial tone commands = %d, want 1", len(commands))
+				t.Fatalf("initial sequence commands = %d, want 1", len(commands))
 			}
 			keys := h.commandKeys()
-			if len(keys) < 2 {
-				t.Fatalf("command order = %v, want at least two notes", keys)
+			if len(keys) != 3 {
+				t.Fatalf("command order = %v, want one command per repetition", keys)
 			}
 
 			first := commands[0]
@@ -542,7 +554,7 @@ func TestTerminalRequestCompletedFailsSessionAndStopsSequence(t *testing.T) {
 			if err := h.deliver(&application.RequestCompleted{
 				RequestID:  first.IdempotencyKey,
 				EntityID:   testBindings[0].EntityID,
-				Action:     toneAction,
+				Action:     toneSequenceAction,
 				State:      test.state,
 				ErrorCode:  test.errorCode,
 				ResultJSON: `{"detail":"terminal"}`,
@@ -554,7 +566,7 @@ func TestTerminalRequestCompletedFailsSessionAndStopsSequence(t *testing.T) {
 				t.Fatalf("terminal event emitted %d effects, want only the session record", got)
 			}
 			if got := len(requestCommands(effects[before:])); got != 0 {
-				t.Fatalf("terminal event emitted %d next-note commands, want 0", got)
+				t.Fatalf("terminal event emitted %d next commands, want 0", got)
 			}
 
 			record := lastSessionRecord(t, effects[before:])
@@ -565,12 +577,10 @@ func TestTerminalRequestCompletedFailsSessionAndStopsSequence(t *testing.T) {
 				t.Fatalf("terminal failure details = %+v", record)
 			}
 
-			// A duplicate terminal event and a future success are both ignored
-			// after the session is failed. They must not advance the sequence.
 			if err := h.deliver(&application.RequestCompleted{
 				RequestID:  first.IdempotencyKey,
 				EntityID:   testBindings[0].EntityID,
-				Action:     toneAction,
+				Action:     toneSequenceAction,
 				State:      test.state,
 				ErrorCode:  test.errorCode,
 				ResultJSON: `{"detail":"duplicate"}`,
@@ -580,7 +590,7 @@ func TestTerminalRequestCompletedFailsSessionAndStopsSequence(t *testing.T) {
 			if err := h.deliver(&application.RequestCompleted{
 				RequestID: keys[1],
 				EntityID:  testBindings[0].EntityID,
-				Action:    toneAction,
+				Action:    toneSequenceAction,
 				State:     application.CommandStateSucceeded,
 			}); err != nil {
 				t.Fatalf("deliver future success: %v", err)
@@ -594,7 +604,7 @@ func TestTerminalRequestCompletedFailsSessionAndStopsSequence(t *testing.T) {
 
 func TestRequestCompletedIgnoresOutOfOrderAndDuplicateEvents(t *testing.T) {
 	h := newHarness(t, testBindings)
-	response, err := h.run(jobPlaySong, `{"song":"little-star","repeat":1}`, "ordered-song")
+	response, err := h.run(jobPlaySong, `{"song":"little-star","repeat":3}`, "ordered-song")
 	if err != nil || !response.Status.IsOK() {
 		t.Fatalf("RunJob: %+v, %v", response, err)
 	}
@@ -602,11 +612,11 @@ func TestRequestCompletedIgnoresOutOfOrderAndDuplicateEvents(t *testing.T) {
 	effects := h.writer.waitFor(t, 2)
 	commands := requestCommands(effects)
 	if len(commands) != 1 {
-		t.Fatalf("initial tone commands = %d, want 1", len(commands))
+		t.Fatalf("initial sequence commands = %d, want 1", len(commands))
 	}
 	keys := h.commandKeys()
-	if len(keys) < 3 {
-		t.Fatalf("command order = %v, want at least three notes", keys)
+	if len(keys) != 3 {
+		t.Fatalf("command order = %v, want one command per repetition", keys)
 	}
 
 	first := commands[0]
@@ -615,7 +625,7 @@ func TestRequestCompletedIgnoresOutOfOrderAndDuplicateEvents(t *testing.T) {
 		if err := h.deliver(&application.RequestCompleted{
 			RequestID: key,
 			EntityID:  testBindings[0].EntityID,
-			Action:    toneAction,
+			Action:    toneSequenceAction,
 			State:     application.CommandStateSucceeded,
 		}); err != nil {
 			t.Fatalf("deliver out-of-order success: %v", err)
@@ -628,7 +638,7 @@ func TestRequestCompletedIgnoresOutOfOrderAndDuplicateEvents(t *testing.T) {
 	if err := h.deliver(&application.RequestCompleted{
 		RequestID: first.IdempotencyKey,
 		EntityID:  testBindings[0].EntityID,
-		Action:    toneAction,
+		Action:    toneSequenceAction,
 		State:     application.CommandStateSucceeded,
 	}); err != nil {
 		t.Fatalf("deliver first success: %v", err)
@@ -645,7 +655,7 @@ func TestRequestCompletedIgnoresOutOfOrderAndDuplicateEvents(t *testing.T) {
 		if err := h.deliver(&application.RequestCompleted{
 			RequestID: key,
 			EntityID:  testBindings[0].EntityID,
-			Action:    toneAction,
+			Action:    toneSequenceAction,
 			State:     application.CommandStateSucceeded,
 		}); err != nil {
 			t.Fatalf("deliver duplicate/out-of-order success: %v", err)
@@ -658,7 +668,7 @@ func TestRequestCompletedIgnoresOutOfOrderAndDuplicateEvents(t *testing.T) {
 	if err := h.deliver(&application.RequestCompleted{
 		RequestID:  second.IdempotencyKey,
 		EntityID:   testBindings[0].EntityID,
-		Action:     toneAction,
+		Action:     toneSequenceAction,
 		State:      application.CommandStateTimedOut,
 		ErrorCode:  "COMMAND_TIMEOUT",
 		ResultJSON: `{"detail":"timeout"}`,
@@ -666,28 +676,22 @@ func TestRequestCompletedIgnoresOutOfOrderAndDuplicateEvents(t *testing.T) {
 		t.Fatalf("deliver second timeout: %v", err)
 	}
 	effects = h.writer.waitFor(t, before+1)
-	if got := len(requestCommands(effects[before:])); got != 0 {
-		t.Fatalf("timeout emitted %d next-note commands, want 0", got)
-	}
 	record := lastSessionRecord(t, effects[before:])
-	if record["status"] != statusFailed || record["completed_notes"] != float64(1) {
+	if record["status"] != statusFailed || record["completed_notes"] != float64(len(songCatalog[songLittleStar])) {
 		t.Fatalf("timeout record = %+v", record)
 	}
-	if record["error_code"] != "COMMAND_TIMEOUT" || record["failed_note"] == nil {
-		t.Fatalf("timeout failure details = %+v", record)
-	}
 
-	// Replays after failure must remain no-ops.
+	before = h.writer.count()
 	for _, event := range []*application.RequestCompleted{
-		{RequestID: second.IdempotencyKey, EntityID: testBindings[0].EntityID, Action: toneAction, State: application.CommandStateTimedOut},
-		{RequestID: keys[2], EntityID: testBindings[0].EntityID, Action: toneAction, State: application.CommandStateSucceeded},
+		{RequestID: second.IdempotencyKey, EntityID: testBindings[0].EntityID, Action: toneSequenceAction, State: application.CommandStateTimedOut},
+		{RequestID: keys[2], EntityID: testBindings[0].EntityID, Action: toneSequenceAction, State: application.CommandStateSucceeded},
 	} {
 		if err := h.deliver(event); err != nil {
 			t.Fatalf("deliver replay after failure: %v", err)
 		}
 	}
-	if got := h.writer.count(); got != before+1 {
-		t.Fatalf("replay after failure emitted effects: got %d, want %d", got, before+1)
+	if got := h.writer.count(); got != before {
+		t.Fatalf("replay after failure emitted effects: got %d, want %d", got, before)
 	}
 }
 

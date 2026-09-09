@@ -87,11 +87,11 @@ func sessionSummary(session *musicSession, displayBound, indicatorBound bool) st
 	}
 }
 
-func toneCommand(entityID string, command *sessionCommand) *application.RequestCommand {
+func requestCommand(entityID string, command *sessionCommand) *application.RequestCommand {
 	return &application.RequestCommand{
 		EntityID:       entityID,
-		Action:         toneAction,
-		ArgsJSON:       mustJSON(command.Note),
+		Action:         command.Action,
+		ArgsJSON:       command.ArgsJSON,
 		IdempotencyKey: command.Key,
 	}
 }
@@ -127,7 +127,7 @@ func (s *Service) onRequestCompleted(instanceID string, event *application.Reque
 		s.mu.Unlock()
 		return nil
 	}
-	if event.Action != "" && event.Action != toneAction {
+	if event.Action != "" && event.Action != command.Action {
 		s.mu.Unlock()
 		return nil
 	}
@@ -138,23 +138,32 @@ func (s *Service) onRequestCompleted(instanceID string, event *application.Reque
 	}
 
 	command.State = state
-	noteResult := &NoteResult{Index: command.Index, FrequencyHz: command.Note.FrequencyHz, DurationMS: command.Note.DurationMS}
 	switch state {
 	case commandSucceeded:
-		session.CompletedNotes++
-		session.LastNote = noteResult
+		last := command.Notes[len(command.Notes)-1]
+		session.CompletedNotes += len(command.Notes)
+		session.LastNote = &NoteResult{
+			Index:       command.StartNoteIndex + len(command.Notes) - 1,
+			FrequencyHz: last.FrequencyHz,
+			DurationMS:  last.DurationMS,
+		}
 		if session.CompletedNotes >= session.TotalNotes {
 			session.Status = statusCompleted
 		} else {
 			session.Status = statusPlaying
 		}
 	case commandFailed, commandTimedOut, commandCancelled:
+		first := command.Notes[0]
 		session.Status = statusFailed
 		session.ErrorCode = event.ErrorCode
 		session.ResultJSON = event.ResultJSON
-		session.FailedNote = noteResult
-		// Fail closed: once a note reaches a non-success terminal state, no
-		// later note may be emitted even if another event reaches this path.
+		session.FailedNote = &NoteResult{
+			Index:       command.StartNoteIndex,
+			FrequencyHz: first.FrequencyHz,
+			DurationMS:  first.DurationMS,
+		}
+		// Fail closed: once a command reaches a non-success terminal state, no
+		// later command may be emitted even if another event reaches this path.
 		session.NextIndex = len(session.CommandOrder) + 1
 	default:
 		s.mu.Unlock()
@@ -164,7 +173,7 @@ func (s *Service) onRequestCompleted(instanceID string, event *application.Reque
 	if state == commandSucceeded && session.Status == statusPlaying && session.NextIndex < len(session.CommandOrder) {
 		next := session.Commands[session.CommandOrder[session.NextIndex]]
 		session.NextIndex++
-		effects = append(effects, toneCommand(soundEntity(st), next))
+		effects = append(effects, requestCommand(soundEntity(st), next))
 	}
 	s.mu.Unlock()
 
