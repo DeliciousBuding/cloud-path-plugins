@@ -43,7 +43,7 @@ func TestManifestMachineIdentity(t *testing.T) {
 		"id: " + pluginIDValue,
 		"version: " + pluginVersion,
 		"protocol: 1",
-		`core: ">=0.2.15 <0.3.0"`,
+		`core: ">=0.2.29 <0.3.0"`,
 		"entrypoint: " + entrypointBinary,
 		"- id: " + contributionID,
 	} {
