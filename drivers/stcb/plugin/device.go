@@ -17,7 +17,7 @@ const (
 	legacyFrameWindow  = 800 * time.Millisecond
 	legacySyncWindow   = 1200 * time.Millisecond
 	frameWaitPollDelay = 20 * time.Millisecond
-	writeByteDelay     = 5 * time.Millisecond
+	writeByteDelay     = 20 * time.Millisecond
 )
 
 // deviceConfig 是打开一台 STC-B 设备的参数（来自插件实例配置）。
@@ -248,8 +248,8 @@ func (d *device) write(b []byte) error {
 	return nil
 }
 
-// writeSlow 逐字节节流：固件 UART 命令缓冲仅 1 字节；5ms 已远大于 115200 下单字节时间，
-// 同时把旧 80ms/byte 的串口写入开销降下来。
+// writeSlow 逐字节节流：固件 UART 命令缓冲仅 1 字节。2026-09-09 真板压测
+// 5ms/byte 出现 badarg（丢字节），20ms/byte 100/100 通过；兼顾 4s ACK 窗口。
 func (d *device) writeSlow(ctx context.Context, b []byte) error {
 	for _, ch := range b {
 		if err := d.write([]byte{ch}); err != nil {
