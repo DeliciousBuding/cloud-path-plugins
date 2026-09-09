@@ -328,6 +328,7 @@ func TestDescriptorAndManifestIdentity(t *testing.T) {
 		"type: metrics",
 		"recordType: window",
 		"type: schedule",
+		"source: jobs",
 		"title: 自动提醒计划",
 		"type: actions",
 		"source: manual-jobs",
@@ -377,8 +378,8 @@ func TestDescriptorAndManifestIdentity(t *testing.T) {
 		t.Fatal("schedule/actions section boundary missing")
 	}
 	scheduleBlock := manifestText[scheduleStart : scheduleStart+actionsStart]
-	if strings.Contains(scheduleBlock, "\n                source:") || strings.Contains(scheduleBlock, "\n                recordType:") {
-		t.Fatal("schedule section must omit source/recordType until Core accepts jobs")
+	if !strings.Contains(scheduleBlock, "\n                source: jobs") || strings.Contains(scheduleBlock, "\n                recordType:") {
+		t.Fatal("schedule section must use source: jobs and no recordType")
 	}
 	for _, want := range []string{hallCap, keyCap, buzzerCap, displayCap} {
 		if !strings.Contains(string(mirror), want) {
