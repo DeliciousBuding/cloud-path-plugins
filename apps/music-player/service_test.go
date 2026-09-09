@@ -238,7 +238,7 @@ func requestCommands(effects []*application.ApplicationEffect) []*application.Re
 	return commands
 }
 
-const musicPlayerUIJSON = `{"apiVersion":1,"navigation":{"title":"音乐播放器","icon":"music","order":50,"route":"music","visibility":"instance-enabled"},"pages":[{"id":"home","title":"音乐播放器","sections":[{"type":"status","source":"instance"},{"type":"actions","source":"manual-jobs"},{"type":"records","source":"records","recordType":"playback","presentation":"timeline"}]}]}`
+const musicPlayerUIJSON = `{"apiVersion":1,"navigation":{"title":"音乐播放器","icon":"music","order":50,"route":"music","visibility":"instance-enabled"},"pages":[{"id":"home","title":"音乐播放器","sections":[{"type":"status","source":"instance"},{"type":"metrics","source":"records","recordType":"music_session"},{"type":"actions","source":"manual-jobs"},{"type":"records","source":"records","recordType":"music_session","presentation":"timeline"}]}]}`
 
 func TestDescriptorAndManifestIdentity(t *testing.T) {
 	svc := New()

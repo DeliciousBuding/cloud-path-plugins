@@ -29,19 +29,36 @@ UI = {
         "icon": "music",
         "order": 50,
         "route": "music",
-        "visibility": "instance-enabled",
+        "visibility": "instance-enabled"
     },
-    "pages": [{
-        "id": "home",
-        "title": "音乐播放器",
-        "sections": [
-            {"type": "status", "source": "instance"},
-            {"type": "actions", "source": "manual-jobs"},
-            {"type": "records", "source": "records", "recordType": "playback", "presentation": "timeline"},
-        ],
-    }],
+    "pages": [
+        {
+            "id": "home",
+            "title": "音乐播放器",
+            "sections": [
+                {
+                    "type": "status",
+                    "source": "instance"
+                },
+                {
+                    "type": "metrics",
+                    "source": "records",
+                    "recordType": "music_session"
+                },
+                {
+                    "type": "actions",
+                    "source": "manual-jobs"
+                },
+                {
+                    "type": "records",
+                    "source": "records",
+                    "recordType": "music_session",
+                    "presentation": "timeline"
+                }
+            ]
+        }
+    ]
 }
-
 
 def unique_object(pairs):
     result = {}
@@ -64,7 +81,7 @@ def validate(value):
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
         "kind": "Application",
         "id": PLUGIN_ID,
-        "version": "0.2.1",
+        "version": "0.2.2",
         "protocol": 1,
         "entrypoint": ENTRYPOINT,
         "compatibility": {"core": ">=0.2.15 <0.3.0"},
@@ -121,7 +138,7 @@ def validate_tree(root, value):
                 errors.append(f"non-public import in {relative}: {name}")
             if name.startswith(CORE + "/") and not name.startswith(CORE + "/sdk/go/"):
                 errors.append(f"non-SDK Core import in {relative}: {name}")
-    if "Version **0.2.1**" not in (root / "README.md").read_text(encoding="utf-8"):
+    if "Version **0.2.2**" not in (root / "README.md").read_text(encoding="utf-8"):
         errors.append("README.md version does not match the manifest")
     return errors
 
