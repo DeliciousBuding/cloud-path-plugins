@@ -32,21 +32,107 @@ UI = {
         "icon": "bell-ring",
         "order": 40,
         "route": "sensor-alert",
-        "visibility": "instance-enabled",
+        "visibility": "instance-enabled"
     },
-    "pages": [{
-        "id": "home",
-        "title": "传感器告警",
-        "sections": [
-            {"type": "status", "source": "instance"},
-            {"type": "metrics", "source": "instance"},
-            {"type": "actions", "source": "manual-jobs"},
-            {"type": "records", "source": "records", "recordType": "alert", "presentation": "timeline"},
-            {"type": "form", "source": "config"},
-        ],
-    }],
+    "pages": [
+        {
+            "id": "home",
+            "title": "传感器告警",
+            "sections": [
+                {
+                    "type": "status",
+                    "source": "instance"
+                },
+                {
+                    "type": "metrics",
+                    "source": "records",
+                    "recordType": "alert"
+                },
+                {
+                    "type": "actions",
+                    "source": "manual-jobs"
+                },
+                {
+                    "type": "records",
+                    "source": "records",
+                    "recordType": "alert",
+                    "presentation": "timeline"
+                },
+                {
+                    "type": "form",
+                    "source": "config",
+                    "fields": [
+                        {
+                            "key": "app_config.temperature_min",
+                            "label": "温度下限",
+                            "type": "number",
+                            "description": "低于该值触发 temperature-low。",
+                            "default": 18
+                        },
+                        {
+                            "key": "app_config.temperature_max",
+                            "label": "温度上限",
+                            "type": "number",
+                            "description": "高于该值触发 temperature-high。",
+                            "default": 28
+                        },
+                        {
+                            "key": "app_config.light_min",
+                            "label": "光照下限",
+                            "type": "number",
+                            "description": "留空表示不评估光照下限。"
+                        },
+                        {
+                            "key": "app_config.light_max",
+                            "label": "光照上限",
+                            "type": "number",
+                            "description": "留空表示不评估光照上限。"
+                        },
+                        {
+                            "key": "app_config.contact_enabled",
+                            "label": "启用接触告警",
+                            "type": "boolean",
+                            "description": "启用 hall@1 接触事件告警。",
+                            "default": False
+                        },
+                        {
+                            "key": "app_config.vibration_enabled",
+                            "label": "启用振动告警",
+                            "type": "boolean",
+                            "description": "启用 vibration@1 振动事件告警。",
+                            "default": False
+                        },
+                        {
+                            "key": "app_config.cooldown_s",
+                            "label": "静默时间（秒）",
+                            "type": "integer",
+                            "description": "同一条件触发后的静默秒数；0 表示不抑制重复触发。",
+                            "minimum": 0,
+                            "maximum": 86400,
+                            "default": 60
+                        },
+                        {
+                            "key": "app_config.silent",
+                            "label": "静音模式",
+                            "type": "boolean",
+                            "description": "开启后仅记录并控制灯光，不发送提示音。",
+                            "default": False
+                        },
+                        {
+                            "key": "app_config.alert_led_mask",
+                            "label": "告警灯位掩码",
+                            "type": "integer",
+                            "description": "触发时发送给 LED 的 0–255 掩码。",
+                            "minimum": 0,
+                            "maximum": 255,
+                            "default": 255
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
 }
-
 
 def unique_object(pairs):
     result = {}
@@ -68,7 +154,7 @@ def validate(value):
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
         "kind": "Application",
         "id": PLUGIN_ID,
-        "version": "0.1.2",
+        "version": "0.1.3",
         "protocol": 1,
         "entrypoint": ENTRYPOINT,
         "compatibility": {"core": ">=0.2.15 <0.3.0"},

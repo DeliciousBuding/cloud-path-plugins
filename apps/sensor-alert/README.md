@@ -2,13 +2,13 @@
 
 `io.github.deliciousbuding.cloud-path-app-sensor-alert` 是一个设备无关的 CloudPath Application Plugin。它只消费绑定实体的观测和 CapabilityEvent，再通过领域记录与通用 `tone` / `led` 命令表达告警动作，不打开串口、不访问网络、不烧录固件。
 
-版本：`0.1.2`
+版本：`0.1.3`
 Application Protocol：`1`
 最低 Core：`0.2.15`
 
 ## Web UI 贡献
 
-Manifest 声明 `ui.apiVersion: 1`，安装并启用实例后注册导航“传感器告警”和独立路由 `/apps/sensor-alert`。首页由 Core 白名单 section 渲染：状态、指标、布防/撤防/状态手动操作、`alert` 时间线和配置表单；阈值、静默和 armed 状态从实例投影读取，不把原始 JSON 当主界面。
+Manifest 声明 `ui.apiVersion: 1`，安装并启用实例后注册导航“传感器告警”和独立路由 `/apps/sensor-alert`。首页由 Core 白名单 section 渲染：实例状态、来自 `alert` 记录的最新指标、布防/撤防/状态手动操作、`alert` 时间线和配置表单。表单覆盖阈值、静默、冷却和 LED 掩码；`alert_tone` 复杂对象仍保留在高级参数。
 
 ## 与 Environment Guard 的边界
 
