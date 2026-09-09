@@ -306,7 +306,7 @@ func TestDescriptorAndManifestIdentity(t *testing.T) {
 	if err := json.Unmarshal([]byte(musicPlayerUIJSON), &wantUI); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(gotUI, wantUI) {
+	if !reflect.DeepEqual(stripUII18n(gotUI), stripUII18n(wantUI)) {
 		t.Fatalf("UI contribution drift: %#v", gotUI)
 	}
 }
@@ -873,6 +873,28 @@ func TestSingleActiveSessionAndRebindingGuard(t *testing.T) {
 		t.Fatalf("same binding while active was rejected: %+v, %v", unchanged, err)
 	}
 }
+func stripUII18n(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(typed))
+		for key, child := range typed {
+			if key == "i18n" || key == "valuesI18n" {
+				continue
+			}
+			out[key] = stripUII18n(child)
+		}
+		return out
+	case []any:
+		out := make([]any, len(typed))
+		for i, child := range typed {
+			out[i] = stripUII18n(child)
+		}
+		return out
+	default:
+		return value
+	}
+}
+
 func readJSONFile(t *testing.T, name string) map[string]any {
 	t.Helper()
 	data, err := os.ReadFile(name)

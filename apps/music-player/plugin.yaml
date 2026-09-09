@@ -2,11 +2,11 @@
   "apiVersion": "plugins.cloudpath.dev/v1alpha1",
   "kind": "Application",
   "id": "io.github.deliciousbuding.cloud-path-app-music-player",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "protocol": 1,
   "entrypoint": "cloud-path-app-music-player",
   "compatibility": {
-    "core": ">=0.2.15 <0.3.0"
+    "core": ">=0.2.29 <0.3.0"
   },
   "permissions": {
     "hardware": [],
@@ -43,7 +43,11 @@
             "icon": "music",
             "order": 50,
             "route": "music",
-            "visibility": "always"
+            "visibility": "always",
+            "i18n": {
+              "zh-CN": "音乐播放器",
+              "en-US": "Music player"
+            }
           },
           "pages": [
             {
@@ -56,7 +60,15 @@
                   "source": "instance",
                   "title": "播放设备",
                   "description": "查看音乐播放器当前是否可用。",
-                  "emptyText": "暂无设备状态。"
+                  "emptyText": "暂无设备状态。",
+                  "i18n": {
+                    "zh-CN": "播放设备",
+                    "en-US": "Playback device",
+                    "zh-CN.description": "查看音乐播放器当前是否可用。",
+                    "en-US.description": "Check whether the music player is currently available.",
+                    "zh-CN.emptyText": "暂无设备状态。",
+                    "en-US.emptyText": "No device status available."
+                  }
                 },
                 {
                   "type": "metrics",
@@ -74,7 +86,25 @@
                         "birthday": "生日歌",
                         "ode-to-joy": "欢乐颂"
                       },
-                      "hideWhenEmpty": true
+                      "hideWhenEmpty": true,
+                      "i18n": {
+                        "zh-CN": "当前歌曲",
+                        "en-US": "Current song"
+                      },
+                      "valuesI18n": {
+                        "little-star": {
+                          "zh-CN": "小星星",
+                          "en-US": "Little Star"
+                        },
+                        "birthday": {
+                          "zh-CN": "生日歌",
+                          "en-US": "Happy Birthday"
+                        },
+                        "ode-to-joy": {
+                          "zh-CN": "欢乐颂",
+                          "en-US": "Ode to Joy"
+                        }
+                      }
                     },
                     {
                       "key": "status",
@@ -85,6 +115,32 @@
                         "playing": "播放中",
                         "completed": "播放完成",
                         "failed": "播放失败"
+                      },
+                      "i18n": {
+                        "zh-CN": "播放状态",
+                        "en-US": "Playback status"
+                      },
+                      "valuesI18n": {
+                        "idle": {
+                          "zh-CN": "未开始",
+                          "en-US": "Not started"
+                        },
+                        "queued": {
+                          "zh-CN": "等待播放",
+                          "en-US": "Queued"
+                        },
+                        "playing": {
+                          "zh-CN": "播放中",
+                          "en-US": "Playing"
+                        },
+                        "completed": {
+                          "zh-CN": "播放完成",
+                          "en-US": "Completed"
+                        },
+                        "failed": {
+                          "zh-CN": "播放失败",
+                          "en-US": "Failed"
+                        }
                       }
                     },
                     {
@@ -92,22 +148,46 @@
                       "label": "播放进度",
                       "unit": "个音符",
                       "precision": 0,
-                      "hideWhenEmpty": true
+                      "hideWhenEmpty": true,
+                      "i18n": {
+                        "zh-CN": "播放进度",
+                        "en-US": "Playback progress"
+                      }
                     },
                     {
                       "key": "queued_at",
                       "label": "排队时间",
                       "format": "time",
-                      "hideWhenEmpty": true
+                      "hideWhenEmpty": true,
+                      "i18n": {
+                        "zh-CN": "排队时间",
+                        "en-US": "Queued at"
+                      }
                     }
-                  ]
+                  ],
+                  "i18n": {
+                    "zh-CN": "播放概览",
+                    "en-US": "Playback overview",
+                    "zh-CN.description": "显示最近一次播放的歌曲、状态、进度和排队时间。",
+                    "en-US.description": "Show the song, status, progress, and queue time of the latest playback.",
+                    "zh-CN.emptyText": "还没有播放记录。",
+                    "en-US.emptyText": "No playback records yet."
+                  }
                 },
                 {
                   "type": "actions",
                   "source": "manual-jobs",
                   "title": "播放控制",
                   "description": "选择“播放内置歌曲”播放预设曲目，或使用“播放单音”播放单个音符。",
-                  "emptyText": "暂无可用的播放操作。"
+                  "emptyText": "暂无可用的播放操作。",
+                  "i18n": {
+                    "zh-CN": "播放控制",
+                    "en-US": "Playback controls",
+                    "zh-CN.description": "选择“播放内置歌曲”播放预设曲目，或使用“播放单音”播放单个音符。",
+                    "en-US.description": "Choose Play built-in song to play a preset track, or Play note to play a single note.",
+                    "zh-CN.emptyText": "暂无可用的播放操作。",
+                    "en-US.emptyText": "No playback actions are available."
+                  }
                 },
                 {
                   "type": "records",
@@ -120,11 +200,19 @@
                   "fields": [
                     {
                       "key": "title",
-                      "label": "标题"
+                      "label": "标题",
+                      "i18n": {
+                        "zh-CN": "标题",
+                        "en-US": "Title"
+                      }
                     },
                     {
                       "key": "summary",
-                      "label": "播放概况"
+                      "label": "播放概况",
+                      "i18n": {
+                        "zh-CN": "播放概况",
+                        "en-US": "Playback summary"
+                      }
                     },
                     {
                       "key": "song",
@@ -133,6 +221,24 @@
                         "little-star": "小星星",
                         "birthday": "生日歌",
                         "ode-to-joy": "欢乐颂"
+                      },
+                      "i18n": {
+                        "zh-CN": "歌曲",
+                        "en-US": "Song"
+                      },
+                      "valuesI18n": {
+                        "little-star": {
+                          "zh-CN": "小星星",
+                          "en-US": "Little Star"
+                        },
+                        "birthday": {
+                          "zh-CN": "生日歌",
+                          "en-US": "Happy Birthday"
+                        },
+                        "ode-to-joy": {
+                          "zh-CN": "欢乐颂",
+                          "en-US": "Ode to Joy"
+                        }
                       }
                     },
                     {
@@ -144,19 +250,67 @@
                         "playing": "播放中",
                         "completed": "播放完成",
                         "failed": "播放失败"
+                      },
+                      "i18n": {
+                        "zh-CN": "状态",
+                        "en-US": "Status"
+                      },
+                      "valuesI18n": {
+                        "idle": {
+                          "zh-CN": "未开始",
+                          "en-US": "Not started"
+                        },
+                        "queued": {
+                          "zh-CN": "等待播放",
+                          "en-US": "Queued"
+                        },
+                        "playing": {
+                          "zh-CN": "播放中",
+                          "en-US": "Playing"
+                        },
+                        "completed": {
+                          "zh-CN": "播放完成",
+                          "en-US": "Completed"
+                        },
+                        "failed": {
+                          "zh-CN": "播放失败",
+                          "en-US": "Failed"
+                        }
                       }
                     },
                     {
                       "key": "queued_at",
                       "label": "排队时间",
                       "format": "time",
-                      "hideWhenEmpty": true
+                      "hideWhenEmpty": true,
+                      "i18n": {
+                        "zh-CN": "排队时间",
+                        "en-US": "Queued at"
+                      }
                     }
-                  ]
+                  ],
+                  "i18n": {
+                    "zh-CN": "播放记录",
+                    "en-US": "Playback records",
+                    "zh-CN.description": "按时间查看最近的播放情况。",
+                    "en-US.description": "View recent playback in chronological order.",
+                    "zh-CN.emptyText": "还没有播放记录。",
+                    "en-US.emptyText": "No playback records yet."
+                  }
                 }
-              ]
+              ],
+              "i18n": {
+                "zh-CN": "音乐播放器",
+                "en-US": "Music player",
+                "zh-CN.description": "可以远程选择内置歌曲并播放，也可以播放一个指定音符。",
+                "en-US.description": "Remotely select and play a built-in song, or play a single note."
+              }
             }
           ]
+        },
+        "i18n": {
+          "zh-CN": "音乐播放器",
+          "en-US": "Music player"
         }
       }
     ]
