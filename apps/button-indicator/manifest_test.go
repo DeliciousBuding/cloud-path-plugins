@@ -71,6 +71,27 @@ func TestManifestMatchesCode(t *testing.T) {
 	}
 }
 
+func TestManifestUIContribution(t *testing.T) {
+	m := strings.ReplaceAll(repoFile(t, "plugin.yaml"), "\r\n", "\n")
+	for _, want := range []string{
+		"      ui:\n        apiVersion: 1",
+		"        navigation:\n          title: 工位呼叫\n          icon: bell\n          order: 50\n          route: service-desk\n          visibility: instance-enabled",
+		"        pages:\n          - id: home\n            title: 工位呼叫",
+		"              - type: status",
+		"              - type: metrics\n                source: instance",
+		"              - type: actions\n                source: manual-jobs",
+		"              - type: records\n                recordType: service_call\n                presentation: timeline",
+		"              - type: form\n                source: config",
+	} {
+		if !strings.Contains(m, want) {
+			t.Fatalf("plugin.yaml missing UI contract %q", want)
+		}
+	}
+	if strings.Contains(m, "type: custom") {
+		t.Fatal("button-indicator must use declarative sections, not arbitrary custom UI")
+	}
+}
+
 // TestDescribeReportsRequirements locks the descriptor to the manifest
 // requirement ids: Binder matching is by capability, but the app rejects any
 // binding whose requirement id is not declared here.

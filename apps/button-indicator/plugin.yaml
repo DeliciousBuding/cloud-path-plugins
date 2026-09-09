@@ -1,7 +1,7 @@
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Application
 id: io.github.deliciousbuding.cloud-path-app-button-indicator
-version: 0.1.4
+version: 0.1.5
 protocol: 1
 # Executable entrypoint. The Application Protocol v1 service is implemented in
 # cmd/cloud-path-app-button-indicator and served over the host transport.
@@ -30,3 +30,25 @@ contributes:
   applications:
     - id: button-indicator
       title: 按键交互与工位呼叫
+      ui:
+        apiVersion: 1
+        navigation:
+          title: 工位呼叫
+          icon: bell
+          order: 50
+          route: service-desk
+          visibility: instance-enabled
+        pages:
+          - id: home
+            title: 工位呼叫
+            sections:
+              - type: status
+              - type: metrics
+                source: instance
+              - type: actions
+                source: manual-jobs
+              - type: records
+                recordType: service_call
+                presentation: timeline
+              - type: form
+                source: config

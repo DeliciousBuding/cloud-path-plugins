@@ -4,9 +4,18 @@ A capability-only CloudPath **Application plugin** with a default walking light
 and an opt-in **service-call / acknowledge** workflow for duty desks and
 workstation requests. It is not a medical emergency or life-safety system.
 
-Version **0.1.4** requires **Core and public SDK v0.2.15+** (Core <0.3.0).
+Version **0.1.5** requires **Core and public SDK v0.2.15+** (Core <0.3.0).
 Status: **IMPLEMENTED** — package and Application Protocol tests are not
 real-device acceptance evidence.
+
+## WebUI contribution
+
+`plugin.yaml` declares `ui.apiVersion: 1`. Core creates the navigation entry
+**工位呼叫** and the stable route `/apps/service-desk` for an enabled instance.
+The page is declarative: instance status and metrics for the current call,
+manual `request` / `acknowledge` actions, the `service_call` record timeline
+(the durable request/acknowledgement history), and the configuration form.
+Raw `app_config` / `app_bindings` remain available only in advanced details.
 
 ## Capability requirements
 
