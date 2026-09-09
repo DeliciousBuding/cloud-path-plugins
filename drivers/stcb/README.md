@@ -10,6 +10,10 @@ CloudPath Edge → Plugin Host → cloud-path-driver-stcb → UART 115200 8N1 �
 
 固件与协议位于 [stcb-firmware-sdk](https://github.com/DeliciousBuding/stcb-firmware-sdk)；正式线协议为 STC-B Device Protocol v1。
 
+## Device UI contribution
+
+Manifest 声明 `ui.apiVersion: 1` 的 `ui.device.sections`：状态、`source: diagnostics` 诊断和 `source: device-actions` 动作，追加到设备详情页。Driver 不注册业务主导航；设备能力与观测仍以 Descriptor / Capability 为事实源。
+
 ## Build and test
 
 ~~~bash
@@ -100,7 +104,7 @@ Alarm、compartment、服药时段不属于板载 Driver；这些业务只由 Ap
 
 - plugin id: io.github.deliciousbuding.cloud-path-driver-stcb
 - driver id: stcb
-- version: 0.2.5
+- version: 0.2.6
 - protocol: CloudPath Driver Protocol 1
 - compatibility: CloudPath Core >=0.2.0 <0.3.0
 - permission: hardware [serial]

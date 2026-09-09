@@ -139,6 +139,9 @@ def validate_contributes_block(lines, start_line):
         indent = len(raw) - len(raw.lstrip(" "))
 
         if stripped.startswith("- "):
+            # A deeper sequence is a nested UI/config field, not another contribution item.
+            if item is not None and item_indent is not None and indent > item_indent:
+                continue
             finish_item()
             item_indent = indent
             item = {"id": None, "has_id": False}
@@ -293,6 +296,12 @@ def valid_manifest_text():
         "  drivers:\n"
         "    - id: demodriver\n"
         "      title: Demo Driver\n"
+        "      ui:\n"
+        "        apiVersion: 1\n"
+        "        device:\n"
+        "          sections:\n"
+        "            - type: status\n"
+        "              source: device\n"
     )
 
 

@@ -9,7 +9,7 @@
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Driver
 id: io.github.deliciousbuding.cloud-path-driver-stcb
-version: 0.2.5
+version: 0.2.6
 protocol: 1
 entrypoint: cloudpath-driver-stcb
 compatibility:
@@ -46,3 +46,13 @@ contributes:
     - id: stcb
       title: STC-B Driver
       discovery: manual
+      ui:
+        apiVersion: 1
+        device:
+          sections:
+            - type: status
+              source: device
+            - type: diagnostics
+              source: diagnostics
+            - type: actions
+              source: device-actions

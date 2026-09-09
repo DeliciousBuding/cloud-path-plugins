@@ -154,11 +154,24 @@ func TestManifestConsistency(t *testing.T) {
 		"id: io.github.deliciousbuding.cloud-path-driver-stcb",
 		"entrypoint: cloudpath-driver-stcb",
 		"    - id: stcb",
+		"      ui:",
+		"        apiVersion: 1",
+		"        device:",
+		"          sections:",
+		"            - type: status",
+		"              source: device",
+		"            - type: diagnostics",
+		"              source: diagnostics",
+		"            - type: actions",
+		"              source: device-actions",
 	}
 	for _, c := range checks {
 		if !strings.Contains(s, c) {
 			t.Fatalf("plugin.yaml missing %q", c)
 		}
+	}
+	if strings.Contains(s, "navigation:") {
+		t.Fatal("Driver UI must not register main navigation")
 	}
 	for _, cap := range []string{capClock, capTemp, capIllum, capAnalog, capNav, capHall, capVib, capKey, capBuzzer, capLED, capDisplay, capMotor, capDiag} {
 		if !strings.Contains(s, cap) {
