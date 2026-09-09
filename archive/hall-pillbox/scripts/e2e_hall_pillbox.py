@@ -33,7 +33,7 @@ from typing import Any, Callable, Iterable, Optional
 
 PLUGIN_ID = "io.github.deliciousbuding.cloud-path-app-hall-pillbox"
 DEFAULT_BASE_URL = "https://cloudpath.vectorcontrol.tech"
-DEFAULT_DEVICE = "ding-win-lab/stcb-real-1"
+DEFAULT_DEVICE = "lab-edge/stcb-real-1"
 DEFAULT_BOX_PROD = "box-prod"
 DEFAULT_APP_EDGE = "server"
 DEFAULT_PLUGIN_VERSION = "0.1.1"
