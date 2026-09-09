@@ -104,7 +104,7 @@ Alarm、compartment、服药时段不属于板载 Driver；这些业务只由 Ap
 
 - plugin id: io.github.deliciousbuding.cloud-path-driver-stcb
 - driver id: stcb
-- version: 0.2.7
+- version: 0.2.9
 - protocol: CloudPath Driver Protocol 1
 - compatibility: CloudPath Core >=0.2.0 <0.3.0
 - permission: hardware [serial]
