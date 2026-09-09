@@ -8,7 +8,7 @@
 
 ## WebUI 贡献
 
-`plugin.yaml` 声明 `ui.apiVersion: 1`，Core 会为已启用的实例生成导航“霍尔药盒”和独立路由 `/apps/hall-pillbox`。 停用后入口仍保留，页面会明确显示当前未启用。页面由通用 section 组成：实例状态、来自 `window` 记录的指标、`window` 计划与记录时间线、手动操作和配置表单；`start-window`、`confirm-window`、`status` 作为手动动作展示，开盖确认仍以霍尔 `away`/兼容 `open` 事件为第一事实源。表单覆盖时区、药格标识和提醒音档位；日程数组与显示参数仍保留在高级详情。
+`plugin.yaml` 声明 `ui.apiVersion: 1`，Core 会为已安装实例生成导航“霍尔药盒”和独立路由 `/apps/hall-pillbox`。停用后入口仍保留，页面会明确显示当前未启用。页面由通用 section 组成：实例状态、来自 `window` 记录的指标、`window` 计划与记录时间线、手动操作和配置表单；`start-window`、`confirm-window`、`status` 作为手动动作展示，开盖确认仍以霍尔 `away`/兼容 `open` 事件为第一事实源。表单覆盖时区、药格标识和提醒音档位；日程数组与显示参数仍保留在高级详情。
 
 ## 1. 能力绑定
 
