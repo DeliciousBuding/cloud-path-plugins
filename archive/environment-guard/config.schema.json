@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Environment Guard 配置",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "timezone": {
+      "type": "string",
+      "default": "UTC",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "UTC 或显式 IANA 时区；不接受 Local。"
+    },
+    "temperature_min": {
+      "type": "number",
+      "default": 18,
+      "description": "原始温度读数下限；必须小于上限，单位需由来源或配置确定。"
+    },
+    "temperature_max": {
+      "type": "number",
+      "default": 28,
+      "description": "原始温度读数上限；不转换单位。"
+    },
+    "light_threshold": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "default": null,
+      "description": "默认关闭光照阈值，仅展示原始读数；启用前确认量程和方向。"
+    },
+    "light_alert_when": {
+      "type": "string",
+      "enum": [
+        "below",
+        "above"
+      ],
+      "default": "below",
+      "description": "仅指定数字比较方向；不表示物理明暗已经标定。"
+    },
+    "hysteresis": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "temperature": {
+          "type": "number",
+          "minimum": 0,
+          "default": 1,
+          "description": "必须小于温度上下限差的一半。"
+        },
+        "light": {
+          "type": "number",
+          "minimum": 0,
+          "default": 5,
+          "description": "与光照原始读数同单位。"
+        }
+      }
+    },
+    "stale_after_s": {
+      "type": "integer",
+      "minimum": 60,
+      "maximum": 86400,
+      "default": 120
+    },
+    "temperature_unit": {
+      "type": "string",
+      "maxLength": 32,
+      "default": "",
+      "description": "可选：缺失 unit 时的单位及显式期望单位；不做转换。"
+    },
+    "light_unit": {
+      "type": "string",
+      "maxLength": 32,
+      "default": "",
+      "description": "可选：缺失 unit 时的单位及显式期望单位；否则显示原始/相对读数。"
+    }
+  }
+}

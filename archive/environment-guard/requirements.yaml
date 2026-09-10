@@ -1,0 +1,14 @@
+{
+  "requirements": [
+    {
+      "id": "temperature",
+      "capability": "cloudpath.dev/capability/temperature@1",
+      "cardinality": "one"
+    },
+    {
+      "id": "illuminance",
+      "capability": "cloudpath.dev/capability/illuminance@1",
+      "cardinality": "one"
+    }
+  ]
+}

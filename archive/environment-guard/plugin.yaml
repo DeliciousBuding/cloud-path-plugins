@@ -1,0 +1,452 @@
+{
+  "apiVersion": "plugins.cloudpath.dev/v1alpha1",
+  "kind": "Application",
+  "id": "io.github.deliciousbuding.cloud-path-app-environment-guard",
+  "version": "0.1.7",
+  "protocol": 1,
+  "entrypoint": "cloud-path-app-environment-guard",
+  "compatibility": {
+    "core": ">=0.2.29 <0.3.0"
+  },
+  "permissions": {
+    "hardware": [],
+    "network": [],
+    "filesystem": [],
+    "secrets": []
+  },
+  "requirements": [
+    {
+      "id": "temperature",
+      "capability": "cloudpath.dev/capability/temperature@1",
+      "cardinality": "one"
+    },
+    {
+      "id": "illuminance",
+      "capability": "cloudpath.dev/capability/illuminance@1",
+      "cardinality": "one"
+    }
+  ],
+  "contributes": {
+    "applications": [
+      {
+        "id": "environment-guard",
+        "title": "工位环境监测",
+        "ui": {
+          "apiVersion": 1,
+          "navigation": {
+            "title": "环境监测",
+            "icon": "leaf",
+            "order": 30,
+            "route": "environment",
+            "visibility": "instance-enabled",
+            "i18n": {
+              "zh-CN": "环境监测",
+              "en-US": "Environment monitoring"
+            }
+          },
+          "pages": [
+            {
+              "id": "home",
+              "title": "环境监测",
+              "sections": [
+                {
+                  "type": "status",
+                  "source": "instance",
+                  "title": "应用状态",
+                  "description": "查看应用是否正常运行，以及最近一次状态同步。",
+                  "emptyText": "暂时没有应用状态信息。",
+                  "i18n": {
+                    "zh-CN": "应用状态",
+                    "en-US": "Application status",
+                    "zh-CN.description": "查看应用是否正常运行，以及最近一次状态同步。",
+                    "en-US.description": "Check whether the application is running normally and when its status was last synced.",
+                    "zh-CN.emptyText": "暂时没有应用状态信息。",
+                    "en-US.emptyText": "No application status information yet."
+                  }
+                },
+                {
+                  "type": "metrics",
+                  "source": "records",
+                  "recordType": "environment",
+                  "title": "当前环境",
+                  "description": "显示最近一次收到的温度、光照和环境状态。",
+                  "emptyText": "还没有收到环境数据，请确认设备已连接并开始上报。",
+                  "fields": [
+                    {
+                      "key": "temperature.value",
+                      "label": "温度",
+                      "unit": "temperature.unit",
+                      "precision": 1,
+                      "hideWhenEmpty": true,
+                      "i18n": {
+                        "zh-CN": "温度",
+                        "en-US": "Temperature"
+                      }
+                    },
+                    {
+                      "key": "illuminance.value",
+                      "label": "光照",
+                      "unit": "illuminance.unit",
+                      "precision": 0,
+                      "hideWhenEmpty": true,
+                      "i18n": {
+                        "zh-CN": "光照",
+                        "en-US": "Light"
+                      }
+                    },
+                    {
+                      "key": "status",
+                      "label": "环境状态",
+                      "values": {
+                        "within_thresholds": "正常",
+                        "attention": "需要关注",
+                        "stale": "数据已过期",
+                        "unknown": "状态未知"
+                      },
+                      "i18n": {
+                        "zh-CN": "环境状态",
+                        "en-US": "Environment status"
+                      },
+                      "valuesI18n": {
+                        "within_thresholds": {
+                          "zh-CN": "正常",
+                          "en-US": "Normal"
+                        },
+                        "attention": {
+                          "zh-CN": "需要关注",
+                          "en-US": "Needs attention"
+                        },
+                        "stale": {
+                          "zh-CN": "数据已过期",
+                          "en-US": "Data is outdated"
+                        },
+                        "unknown": {
+                          "zh-CN": "状态未知",
+                          "en-US": "Status unknown"
+                        }
+                      }
+                    },
+                    {
+                      "key": "observed_at",
+                      "label": "最近观测",
+                      "format": "time",
+                      "hideWhenEmpty": true,
+                      "i18n": {
+                        "zh-CN": "最近观测",
+                        "en-US": "Latest observation"
+                      }
+                    }
+                  ],
+                  "i18n": {
+                    "zh-CN": "当前环境",
+                    "en-US": "Current environment",
+                    "zh-CN.description": "显示最近一次收到的温度、光照和环境状态。",
+                    "en-US.description": "Show the latest received temperature, light, and environment status.",
+                    "zh-CN.emptyText": "还没有收到环境数据，请确认设备已连接并开始上报。",
+                    "en-US.emptyText": "No environment data has been received. Make sure the device is connected and reporting."
+                  }
+                },
+                {
+                  "type": "actions",
+                  "source": "manual-jobs",
+                  "title": "手动操作",
+                  "description": "需要时重新计算当前状态，不会重新读取传感器。",
+                  "emptyText": "暂无可执行的操作。",
+                  "i18n": {
+                    "zh-CN": "手动操作",
+                    "en-US": "Manual actions",
+                    "zh-CN.description": "需要时重新计算当前状态，不会重新读取传感器。",
+                    "en-US.description": "Recalculate the current status when needed; this does not read the sensor again.",
+                    "zh-CN.emptyText": "暂无可执行的操作。",
+                    "en-US.emptyText": "No actions are available."
+                  }
+                },
+                {
+                  "type": "records",
+                  "source": "records",
+                  "recordType": "alert",
+                  "presentation": "timeline",
+                  "title": "变化记录",
+                  "description": "查看温度和光照进入、离开设定范围的最近记录。",
+                  "emptyText": "还没有温度或光照变化记录。",
+                  "fields": [
+                    {
+                      "key": "title",
+                      "label": "变化",
+                      "i18n": {
+                        "zh-CN": "变化",
+                        "en-US": "Change"
+                      }
+                    },
+                    {
+                      "key": "summary",
+                      "label": "说明",
+                      "i18n": {
+                        "zh-CN": "说明",
+                        "en-US": "Notes"
+                      }
+                    },
+                    {
+                      "key": "status",
+                      "label": "状态",
+                      "values": {
+                        "entered": "进入设定范围",
+                        "recovered": "已恢复正常"
+                      },
+                      "i18n": {
+                        "zh-CN": "状态",
+                        "en-US": "Status"
+                      },
+                      "valuesI18n": {
+                        "entered": {
+                          "zh-CN": "进入设定范围",
+                          "en-US": "Entered configured range"
+                        },
+                        "recovered": {
+                          "zh-CN": "已恢复正常",
+                          "en-US": "Returned to normal"
+                        }
+                      }
+                    },
+                    {
+                      "key": "condition",
+                      "label": "类型",
+                      "values": {
+                        "temperature-high": "温度偏高",
+                        "temperature-low": "温度偏低",
+                        "light-below": "光照低于设定值",
+                        "light-above": "光照高于设定值"
+                      },
+                      "i18n": {
+                        "zh-CN": "类型",
+                        "en-US": "Type"
+                      },
+                      "valuesI18n": {
+                        "temperature-high": {
+                          "zh-CN": "温度偏高",
+                          "en-US": "Temperature too high"
+                        },
+                        "temperature-low": {
+                          "zh-CN": "温度偏低",
+                          "en-US": "Temperature too low"
+                        },
+                        "light-below": {
+                          "zh-CN": "光照低于设定值",
+                          "en-US": "Light below threshold"
+                        },
+                        "light-above": {
+                          "zh-CN": "光照高于设定值",
+                          "en-US": "Light above threshold"
+                        }
+                      }
+                    },
+                    {
+                      "key": "value",
+                      "label": "读数",
+                      "unit": "unit",
+                      "precision": 1,
+                      "hideWhenEmpty": true,
+                      "i18n": {
+                        "zh-CN": "读数",
+                        "en-US": "Reading"
+                      }
+                    }
+                  ],
+                  "i18n": {
+                    "zh-CN": "变化记录",
+                    "en-US": "Change records",
+                    "zh-CN.description": "查看温度和光照进入、离开设定范围的最近记录。",
+                    "en-US.description": "View recent records of temperature and light entering or leaving the configured range.",
+                    "zh-CN.emptyText": "还没有温度或光照变化记录。",
+                    "en-US.emptyText": "No temperature or light change records yet."
+                  }
+                },
+                {
+                  "type": "form",
+                  "source": "config",
+                  "fields": [
+                    {
+                      "key": "app_config.timezone",
+                      "label": "时区",
+                      "type": "string",
+                      "description": "用于显示观测时间。填写 UTC 或 Asia/Shanghai 这样的时区名称。",
+                      "placeholder": "Asia/Shanghai",
+                      "default": "UTC",
+                      "i18n": {
+                        "zh-CN": "时区",
+                        "en-US": "Time zone",
+                        "zh-CN.description": "用于显示观测时间。填写 UTC 或 Asia/Shanghai 这样的时区名称。",
+                        "en-US.description": "Used to display observation times. Enter a time zone such as UTC or Asia/Shanghai."
+                      }
+                    },
+                    {
+                      "key": "app_config.temperature_min",
+                      "label": "温度下限",
+                      "type": "number",
+                      "description": "低于这个温度时，环境状态会提示需要关注。数值使用传感器上报的单位。",
+                      "default": 18,
+                      "i18n": {
+                        "zh-CN": "温度下限",
+                        "en-US": "Minimum temperature",
+                        "zh-CN.description": "低于这个温度时，环境状态会提示需要关注。数值使用传感器上报的单位。",
+                        "en-US.description": "The environment status needs attention when the temperature falls below this value. The sensor's reported unit is used."
+                      }
+                    },
+                    {
+                      "key": "app_config.temperature_max",
+                      "label": "温度上限",
+                      "type": "number",
+                      "description": "高于这个温度时，环境状态会提示需要关注。数值使用传感器上报的单位。",
+                      "default": 28,
+                      "i18n": {
+                        "zh-CN": "温度上限",
+                        "en-US": "Maximum temperature",
+                        "zh-CN.description": "高于这个温度时，环境状态会提示需要关注。数值使用传感器上报的单位。",
+                        "en-US.description": "The environment status needs attention when the temperature rises above this value. The sensor's reported unit is used."
+                      }
+                    },
+                    {
+                      "key": "app_config.light_threshold",
+                      "label": "光照提醒值",
+                      "type": "number",
+                      "description": "需要光照提醒时填写。留空表示只显示读数，不判断是否超出范围。",
+                      "placeholder": "例如 300",
+                      "i18n": {
+                        "zh-CN": "光照提醒值",
+                        "en-US": "Light alert threshold",
+                        "zh-CN.description": "需要光照提醒时填写。留空表示只显示读数，不判断是否超出范围。",
+                        "en-US.description": "Enter a value to receive light alerts. Leave blank to only show the reading without range checks."
+                      }
+                    },
+                    {
+                      "key": "app_config.light_alert_when",
+                      "label": "光照提醒方向",
+                      "type": "select",
+                      "description": "选择低于还是高于设定值时提醒。这里只比较读数，不代表环境一定变暗或变亮。",
+                      "enum": [
+                        "below",
+                        "above"
+                      ],
+                      "default": "below",
+                      "values": {
+                        "below": "低于设定值时提醒",
+                        "above": "高于设定值时提醒"
+                      },
+                      "i18n": {
+                        "zh-CN": "光照提醒方向",
+                        "en-US": "Light alert direction",
+                        "zh-CN.description": "选择低于还是高于设定值时提醒。这里只比较读数，不代表环境一定变暗或变亮。",
+                        "en-US.description": "Choose whether to alert below or above the threshold. This only compares readings; it does not mean the environment is definitely darker or brighter."
+                      },
+                      "valuesI18n": {
+                        "below": {
+                          "zh-CN": "低于设定值时提醒",
+                          "en-US": "Alert when below the threshold"
+                        },
+                        "above": {
+                          "zh-CN": "高于设定值时提醒",
+                          "en-US": "Alert when above the threshold"
+                        }
+                      }
+                    },
+                    {
+                      "key": "app_config.hysteresis.temperature",
+                      "label": "温度恢复缓冲",
+                      "type": "number",
+                      "description": "温度回到正常范围前需要越过的缓冲值，避免边界附近反复提醒。",
+                      "minimum": 0,
+                      "default": 1,
+                      "i18n": {
+                        "zh-CN": "温度恢复缓冲",
+                        "en-US": "Temperature recovery hysteresis",
+                        "zh-CN.description": "温度回到正常范围前需要越过的缓冲值，避免边界附近反复提醒。",
+                        "en-US.description": "The buffer the temperature must cross before returning to normal, preventing repeated alerts near the boundary."
+                      }
+                    },
+                    {
+                      "key": "app_config.hysteresis.light",
+                      "label": "光照恢复缓冲",
+                      "type": "number",
+                      "description": "光照回到正常范围前需要越过的缓冲值，使用与光照读数相同的单位。",
+                      "minimum": 0,
+                      "default": 5,
+                      "i18n": {
+                        "zh-CN": "光照恢复缓冲",
+                        "en-US": "Light recovery hysteresis",
+                        "zh-CN.description": "光照回到正常范围前需要越过的缓冲值，使用与光照读数相同的单位。",
+                        "en-US.description": "The buffer light must cross before returning to normal, using the same unit as the light reading."
+                      }
+                    },
+                    {
+                      "key": "app_config.stale_after_s",
+                      "label": "多久没有新数据就标记为过期（秒）",
+                      "type": "integer",
+                      "description": "超过这段时间没有收到新读数，页面会显示数据已过期。",
+                      "minimum": 60,
+                      "maximum": 86400,
+                      "default": 120,
+                      "i18n": {
+                        "zh-CN": "多久没有新数据就标记为过期（秒）",
+                        "en-US": "Mark data outdated after no updates for (seconds)",
+                        "zh-CN.description": "超过这段时间没有收到新读数，页面会显示数据已过期。",
+                        "en-US.description": "If no new reading arrives within this time, the page marks the data as outdated."
+                      }
+                    },
+                    {
+                      "key": "app_config.temperature_unit",
+                      "label": "温度单位",
+                      "type": "string",
+                      "description": "传感器没有提供单位时使用，例如 C 或 °C。应用不会换算温度。",
+                      "placeholder": "例如 C",
+                      "i18n": {
+                        "zh-CN": "温度单位",
+                        "en-US": "Temperature unit",
+                        "zh-CN.description": "传感器没有提供单位时使用，例如 C 或 °C。应用不会换算温度。",
+                        "en-US.description": "Used when the sensor does not provide a unit, for example C or °C. The application does not convert temperature."
+                      }
+                    },
+                    {
+                      "key": "app_config.light_unit",
+                      "label": "光照单位",
+                      "type": "string",
+                      "description": "传感器没有提供单位时使用，例如 lux。应用不会换算光照。",
+                      "placeholder": "例如 lux",
+                      "i18n": {
+                        "zh-CN": "光照单位",
+                        "en-US": "Light unit",
+                        "zh-CN.description": "传感器没有提供单位时使用，例如 lux。应用不会换算光照。",
+                        "en-US.description": "Used when the sensor does not provide a unit, for example lux. The application does not convert light."
+                      }
+                    }
+                  ],
+                  "title": "提醒设置",
+                  "description": "设置温度范围、光照提醒和读数过期时间。",
+                  "emptyText": "暂无设置项。",
+                  "i18n": {
+                    "zh-CN": "提醒设置",
+                    "en-US": "Reminder settings",
+                    "zh-CN.description": "设置温度范围、光照提醒和读数过期时间。",
+                    "en-US.description": "Configure the temperature range, light alert, and data expiry time.",
+                    "zh-CN.emptyText": "暂无设置项。",
+                    "en-US.emptyText": "No settings available."
+                  }
+                }
+              ],
+              "description": "查看温度和光照是否在设定范围内，并了解最近一次变化。",
+              "i18n": {
+                "zh-CN": "环境监测",
+                "en-US": "Environment monitoring",
+                "zh-CN.description": "查看温度和光照是否在设定范围内，并了解最近一次变化。",
+                "en-US.description": "Check whether temperature and light are within the configured range and review the latest change."
+              }
+            }
+          ]
+        },
+        "i18n": {
+          "zh-CN": "工位环境监测",
+          "en-US": "Workstation environment monitoring"
+        }
+      }
+    ]
+  }
+}

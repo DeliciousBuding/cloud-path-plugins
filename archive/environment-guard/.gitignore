@@ -1,0 +1,14 @@
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+*.log
+.local/
+.worktrees/
+.env
+.env.*
+.idea/
+.vscode/
+.DS_Store
+__pycache__/

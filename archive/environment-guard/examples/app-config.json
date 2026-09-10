@@ -1,0 +1,14 @@
+{
+  "timezone": "UTC",
+  "temperature_min": 18,
+  "temperature_max": 28,
+  "light_threshold": null,
+  "light_alert_when": "below",
+  "hysteresis": {
+    "temperature": 1,
+    "light": 5
+  },
+  "stale_after_s": 120,
+  "temperature_unit": "",
+  "light_unit": ""
+}
