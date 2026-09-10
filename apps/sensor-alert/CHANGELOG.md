@@ -2,6 +2,11 @@
 
 本文件记录用户可见变化。较早版本可在 Git tag 和 GitHub Releases 中查看。
 
+## v0.2.2 - 2026-09-10
+
+- 迁移到 Apache License 2.0，并补齐 NOTICE、README 许可证信息与发布元数据。
+- Release 资产新增 LICENSE 和 NOTICE，便于二进制分发时随附许可证与归属信息。
+
 ## v0.2.1 - 2026-09-10
 
 - 修正最低 Core 版本声明和手动真板 E2E 的默认插件版本。

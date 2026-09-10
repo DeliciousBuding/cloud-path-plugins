@@ -67,8 +67,10 @@ jobs:
         run: |
           set -euo pipefail
           cd release-assets
-          sha256sum * > checksums.txt
           cp ../plugin.yaml plugin.yaml
+          cp ../LICENSE LICENSE
+          cp ../NOTICE NOTICE
+          sha256sum * > checksums.txt
           ls -l
 
       - name: Create release

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Command cloud-path-app-sensor-alert serves the public Application Protocol v1
 // over the authenticated transport injected by the host. It chooses no endpoint
 // and never opens hardware, serial ports or network sockets.

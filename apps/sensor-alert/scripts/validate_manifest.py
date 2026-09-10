@@ -254,7 +254,8 @@ def validate(value):
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
         "kind": "Application",
         "id": PLUGIN_ID,
-        "version": "0.2.1",
+        "version": "0.2.2",
+        "license": "Apache-2.0",
         "protocol": 1,
         "entrypoint": ENTRYPOINT,
         "compatibility": {"core": ">=0.2.29 <0.3.0"},
@@ -334,6 +335,7 @@ def self_test(root):
     assert not validate(base)
     for key, bad in [
         ("version", "0.0.0"),
+        ("license", "MIT"),
         ("protocol", True),
         ("compatibility", {"core": ">=0.2.14 <0.3.0"}),
         ("permissions", {"network": ["*"]}),

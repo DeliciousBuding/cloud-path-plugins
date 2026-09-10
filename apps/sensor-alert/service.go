@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package sensoralert implements a device-independent Application plugin that
 // evaluates sensor observations and capability events, then requests generic
 // tone/LED effects. It never opens hardware, serial ports or network sockets.
@@ -22,7 +24,7 @@ import (
 
 const (
 	pluginID      = "io.github.deliciousbuding.cloud-path-app-sensor-alert"
-	pluginVersion = "0.2.1"
+	pluginVersion = "0.2.2"
 
 	jobArm            = "arm"
 	jobDisarm         = "disarm"

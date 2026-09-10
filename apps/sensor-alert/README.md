@@ -1,8 +1,11 @@
 # CloudPath Sensor Alert
 
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![CI](https://github.com/DeliciousBuding/cloud-path-app-sensor-alert/actions/workflows/ci.yml/badge.svg)](https://github.com/DeliciousBuding/cloud-path-app-sensor-alert/actions/workflows/ci.yml)
+
 `io.github.deliciousbuding.cloud-path-app-sensor-alert` 是一个设备无关的 CloudPath Application Plugin。它只消费绑定实体的观测和 CapabilityEvent，再通过领域记录与通用 `tone` / `led` 命令表达告警动作，不打开串口、不访问网络、不烧录固件。
 
-版本：`0.2.1`
+版本：`0.2.2`
 Application Protocol：`1`
 要求：Core `>=0.2.29 <0.3.0`，公开 Go SDK `0.2.15+`
 发布记录见 [CHANGELOG.md](CHANGELOG.md)。
@@ -178,3 +181,7 @@ python scripts/e2e_sensor_alert.py --execute --sensor contact --recovery-mode di
 - 命令发送成功不等于设备执行成功；只有匹配的 `RequestCompleted` 才会更新最近命令结果。
 - 真实硬件 E2E 需手动运行 `scripts/e2e_sensor_alert.py`；当前真板脚本是 LED-only，不验证发声路径。软件-only 验证不依赖 COM3、Edge、真实板或烧录。Driver `tone` 支持和跨租户生产验证仍需单独的真实链路证据；在明确批准前不得用真板 E2E 发 `tone`/`buzzer`。
 - Application Protocol v1 的事件/RPC 只携带 `plugin_instance_id`，不携带 tenant。本插件按实例 ID 隔离状态，并对同一实例 ID 的第二个活动 effect stream 失败关闭；若部署允许不同租户复用同一实例 ID，必须使用 per-instance 隔离或保证实例 ID 跨租户唯一。
+
+## 许可证
+
+本项目采用 Apache License 2.0。见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。
