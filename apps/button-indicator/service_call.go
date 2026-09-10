@@ -15,17 +15,20 @@ import (
 )
 
 const (
-	jobRequest     = "request"
-	jobAcknowledge = "acknowledge"
-	callRecordType = "service_call"
-	callDebounce   = 250 * time.Millisecond
-	callResultWait = 10 * time.Second
-	pendingLEDMask = 255
+	jobRequest            = "request"
+	jobAcknowledge        = "acknowledge"
+	jobAcknowledgePending = "acknowledge-pending"
+	callRecordType        = "service_call"
+	callDebounce          = 250 * time.Millisecond
+	callResultWait        = 10 * time.Second
+	pendingLEDMask        = 255
 
 	// Required explicit input also fails closed on hosts that ignore ManualOnly.
 	requestJobSchema = `{"type":"object","properties":{"confirm":{"type":"boolean","const":true,"title":"确认发起呼叫"},"note":{"type":"string","maxLength":256,"title":"请求说明（可选）"}},"required":["confirm"],"additionalProperties":false}`
 	// Keep the console text form: pattern is unsupported; RunJob validates whitespace.
 	acknowledgeJobSchema = `{"type":"object","properties":{"request_id":{"type":"string","minLength":1,"maxLength":128,"title":"待处理请求编号","description":"使用发起呼叫返回的 request_id；不会确认其它请求。"}},"required":["request_id"],"additionalProperties":false}`
+	// 零参数确认：直接解除当前待处理呼叫。普通用户不该、也无法手抄 request_id。
+	acknowledgePendingJobSchema = `{"type":"object","properties":{},"additionalProperties":false}`
 )
 
 // A business acknowledgement and an actuator result are different facts.
@@ -186,6 +189,12 @@ func (s *Service) runCallJob(req *application.RunJobRequest) (*application.RunJo
 			return nil, status.Errorf(status.CodeInvalidArgument, "acknowledge requires the exact non-empty request_id (no whitespace)")
 		}
 		requestID, canonicalArgs = args.RequestID, mustJSON(args)
+	case jobAcknowledgePending:
+		var args struct{}
+		if err := decodeCallArgs(req.ArgsJSON, &args); err != nil {
+			return nil, err
+		}
+		canonicalArgs = "{}"
 	}
 
 	st := s.lockCallInstance(req.PluginInstanceID)
@@ -208,6 +217,14 @@ func (s *Service) runCallJob(req *application.RunJobRequest) (*application.RunJo
 				return nil, err
 			}
 			return s.callJobResponse(req.JobID, record, false), nil
+		}
+	}
+
+	if req.JobID == jobAcknowledgePending {
+		requestID = calls.pendingID
+		if requestID == "" {
+			s.mu.Unlock()
+			return nil, status.Errorf(status.CodeFailedPrecondition, "there is no pending call to clear")
 		}
 	}
 

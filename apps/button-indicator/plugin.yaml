@@ -1,7 +1,7 @@
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Application
 id: io.github.deliciousbuding.cloud-path-app-button-indicator
-version: 0.1.8
+version: 0.2.0
 protocol: 1
 # Executable entrypoint. The Application Protocol v1 service is implemented in
 # cmd/cloud-path-app-button-indicator and served over the host transport.
@@ -33,18 +33,18 @@ contributes:
       ui:
         apiVersion: 1
         navigation:
-          title: 工位呼叫
+          title: 工位呼叫（值班台）
           icon: bell
           order: 50
           route: service-desk
           visibility: instance-enabled
           i18n:
-            zh-CN: 工位呼叫
-            en-US: Workstation call
+            zh-CN: 工位呼叫（值班台）
+            en-US: Workstation call desk
         pages:
           - id: home
-            title: 工位呼叫
-            description: 需要帮助时发起工位呼叫，处理人员确认后解除提示。
+            title: 工位呼叫（值班台）
+            description: 工位同事按下呼叫按键后，这里会收到一条待处理呼叫；处理完点「确认并解除提示」，或到工位按下确认按键，提示灯即熄灭。
             sections:
               - type: status
                 title: 当前状态
@@ -93,6 +93,22 @@ contributes:
                     i18n:
                       zh-CN: 确认时间
                       en-US: Confirmation time
+                  - key: source
+                    label: 来源
+                    values:
+                      button: 工位按键
+                      job: 值班台发起
+                    hideWhenEmpty: true
+                    i18n:
+                      zh-CN: 来源
+                      en-US: Source
+                    valuesI18n:
+                      button:
+                        zh-CN: 工位按键
+                        en-US: Workstation button
+                      job:
+                        zh-CN: 值班台发起
+                        en-US: Started by desk
                   - key: note
                     label: 说明
                     hideWhenEmpty: true
@@ -108,14 +124,14 @@ contributes:
                   en-US.emptyText: No call records yet.
               - type: actions
                 title: 呼叫操作
-                description: 需要帮助时发起呼叫；处理完成后确认并解除提示。
+                description: 日常呼叫由工位按键发起；值班台也可以远程替工位发起。处理完成后点「确认并解除提示」。
                 emptyText: 当前没有可执行的操作。
                 source: manual-jobs
                 i18n:
                   zh-CN: 呼叫操作
                   en-US: Call actions
-                  zh-CN.description: 需要帮助时发起呼叫；处理完成后确认并解除提示。
-                  en-US.description: Start a call when help is needed; confirm it when handled to clear the alert.
+                  zh-CN.description: 日常呼叫由工位按键发起；值班台也可以远程替工位发起。处理完成后点「确认并解除提示」。
+                  en-US.description: Calls normally start from the workstation button; the desk can also start one remotely. Tap "Confirm and clear" once handled.
                   zh-CN.emptyText: 当前没有可执行的操作。
                   en-US.emptyText: No actions are available right now.
               - type: records
@@ -164,6 +180,28 @@ contributes:
                     i18n:
                       zh-CN: 确认时间
                       en-US: Confirmation time
+                  - key: source
+                    label: 来源
+                    values:
+                      button: 工位按键
+                      job: 值班台发起
+                    hideWhenEmpty: true
+                    i18n:
+                      zh-CN: 来源
+                      en-US: Source
+                    valuesI18n:
+                      button:
+                        zh-CN: 工位按键
+                        en-US: Workstation button
+                      job:
+                        zh-CN: 值班台发起
+                        en-US: Started by desk
+                  - key: request_id
+                    label: 请求编号（按编号确认时用）
+                    hideWhenEmpty: true
+                    i18n:
+                      zh-CN: 请求编号（按编号确认时用）
+                      en-US: Request ID (for exact confirmation)
                 i18n:
                   zh-CN: 呼叫记录
                   en-US: Call records
@@ -180,14 +218,14 @@ contributes:
                   - key: app_config.mode
                     label: 工作模式
                     type: select
-                    description: 选择走路灯时按按键切换灯位；选择工位呼叫时用于发起和确认呼叫。
+                    description: 走路灯模式下按键切换灯位；工位呼叫模式下，绑定的「发起」按键触发呼叫，「确认」按键解除提示。
                     enum: [walking-light, service-call]
                     default: walking-light
                     i18n:
                       zh-CN: 工作模式
                       en-US: Operating mode
-                      zh-CN.description: 选择走路灯时按按键切换灯位；选择工位呼叫时用于发起和确认呼叫。
-                      en-US.description: In walkway light mode, press the button to switch the light position; in workstation call mode, use it to start and confirm calls.
+                      zh-CN.description: 走路灯模式下按键切换灯位；工位呼叫模式下，绑定的「发起」按键触发呼叫，「确认」按键解除提示。
+                      en-US.description: In walkway light mode the button switches light positions; in workstation call mode the bound request button starts a call and the bound confirm button clears it.
                   - key: app_config.timezone
                     label: 时区
                     type: string
@@ -228,10 +266,10 @@ contributes:
                   zh-CN.emptyText: 暂无需要调整的设置。
                   en-US.emptyText: No settings need attention.
             i18n:
-              zh-CN: 工位呼叫
-              en-US: Workstation call
-              zh-CN.description: 需要帮助时发起工位呼叫，处理人员确认后解除提示。
-              en-US.description: Start a workstation call when help is needed. The alert clears after the responder confirms it.
+              zh-CN: 工位呼叫（值班台）
+              en-US: Workstation call desk
+              zh-CN.description: 工位同事按下呼叫按键后，这里会收到一条待处理呼叫；处理完点「确认并解除提示」，或到工位按下确认按键，提示灯即熄灭。
+              en-US.description: When a workstation presses its call button, a pending call appears here. Tap "Confirm and clear", or press the confirm button at the workstation, to turn the light off.
       i18n:
         zh-CN: 按键交互与工位呼叫
         en-US: Button interaction and workstation calls

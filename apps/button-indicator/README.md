@@ -4,19 +4,20 @@ A capability-only CloudPath **Application plugin** with a default walking light
 and an opt-in **service-call / acknowledge** workflow for duty desks and
 workstation requests. It is not a medical emergency or life-safety system.
 
-Version **0.1.8** requires **Core v0.2.29+** (Core <0.3.0) and public SDK v0.2.15+.
+Version **0.2.0** requires **Core v0.2.29+** (Core <0.3.0) and public SDK v0.2.15+.
 Status: **IMPLEMENTED** — package and Application Protocol tests are not
 real-device acceptance evidence.
 
 ## WebUI contribution
 
 `plugin.yaml` declares `ui.apiVersion: 1`. Core creates the navigation entry
-**工位呼叫** and the stable route `/apps/service-desk` for an enabled instance.
+**工位呼叫（值班台）** and the stable route `/apps/service-desk` for an enabled
+instance.
 The page is declarative: instance status, metrics from `service_call`
-records, manual `request` / `acknowledge` actions, the `service_call` record
-card view, and a configuration form covering mode, timezone, heartbeat cron and
-beep. Raw `app_config` / `app_bindings` remain available only in advanced
-details.
+records, manual `acknowledge-pending` / `request` / `acknowledge` actions, the
+`service_call` record card view, and a configuration form covering mode,
+timezone, heartbeat cron and beep. Raw `app_config` / `app_bindings` remain
+available only in advanced details.
 
 ## Capability requirements
 
@@ -106,10 +107,28 @@ To omit the acknowledgement key or sound, omit its entry. To enable sound, add a
 ## Management-console jobs
 
 `Describe.Jobs` includes understandable titles and bounded `InputSchemaJSON`
-for these actions. Both have **`ManualOnly: true`**; Core v0.2.15's jobs GET
-response exposes `job_descriptors` for the operation UI. `bootstrap` keeps its
-original automatic semantics. A scheduled invocation of a call action is also
-rejected, and `request` requires explicit `confirm: true` as a second guard.
+for these actions. All call actions have **`ManualOnly: true`**; Core v0.2.15's
+jobs GET response exposes `job_descriptors` for the operation UI. `bootstrap`
+keeps its original automatic semantics. A scheduled invocation of a call action
+is also rejected, and `request` requires explicit `confirm: true` as a second
+guard.
+
+### Clear the pending call (no arguments)
+
+`POST /api/plugin-instances/{id}/jobs/acknowledge-pending/run`
+
+```json
+{
+  "args_json": "{}",
+  "idempotency_key": "desk-clear-001"
+}
+```
+
+This is the primary duty-desk action. It acknowledges whichever call is
+currently pending, so an operator never has to copy a `request_id` from a
+record. It fails closed with `FAILED_PRECONDITION` when there is no pending
+call, and it rejects any argument. The declarative UI renders it as a plain
+button, which is why the label is just the action name.
 
 ### Request service
 

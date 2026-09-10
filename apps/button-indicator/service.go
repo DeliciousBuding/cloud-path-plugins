@@ -21,7 +21,7 @@ import (
 // Manifest identity. These must mirror plugin.yaml.
 const (
 	pluginIDValue = "io.github.deliciousbuding.cloud-path-app-button-indicator"
-	pluginVersion = "0.1.8"
+	pluginVersion = "0.2.0"
 
 	jobBootstrap  = "bootstrap"
 	jobHeartbeat  = "indicator-heartbeat"
@@ -154,8 +154,9 @@ func (s *Service) Describe(context.Context) (*application.ApplicationDescriptor,
 		},
 		Jobs: []application.JobDescriptor{
 			{ID: jobBootstrap, Title: "Register declarative schedules", InputSchemaJSON: "{}"},
-			{ID: jobRequest, Title: "发起呼叫", InputSchemaJSON: requestJobSchema, ManualOnly: true},
-			{ID: jobAcknowledge, Title: "确认并解除提示", InputSchemaJSON: acknowledgeJobSchema, ManualOnly: true},
+			{ID: jobAcknowledgePending, Title: "确认并解除提示", InputSchemaJSON: acknowledgePendingJobSchema, ManualOnly: true},
+			{ID: jobRequest, Title: "远程代工位发起呼叫（备用）", InputSchemaJSON: requestJobSchema, ManualOnly: true},
+			{ID: jobAcknowledge, Title: "按编号确认其它呼叫（精确）", InputSchemaJSON: acknowledgeJobSchema, ManualOnly: true},
 		},
 		DeclarativeOnly: false,
 	}, nil
@@ -389,7 +390,7 @@ func (s *Service) RunJob(_ context.Context, req *application.RunJobRequest) (*ap
 	}
 
 	switch req.JobID {
-	case jobRequest, jobAcknowledge:
+	case jobRequest, jobAcknowledge, jobAcknowledgePending:
 		s.mu.Unlock()
 		return s.runCallJob(req)
 	case jobBootstrap:

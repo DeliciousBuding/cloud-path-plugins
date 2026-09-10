@@ -766,3 +766,25 @@ func TestAcknowledgeTextInputValidation(t *testing.T) {
 		t.Fatalf("acknowledged %q, want generated request ID %q", got, requestID)
 	}
 }
+
+// 普通用户不该手抄 request_id：这个零参数动作直接解除当前待处理呼叫。
+func TestAcknowledgePendingClearsCurrentCallWithoutID(t *testing.T) {
+	f := newCallFixture(t, `{"mode":"service-call"}`, callBindings)
+
+	// 没有待处理呼叫时必须 fail-closed，而不是静默成功。
+	if _, err := f.job(jobAcknowledgePending, `{}`, "nothing-pending"); err == nil {
+		t.Fatal("acknowledge-pending accepted with no pending call")
+	}
+	// 这个动作不接受任何参数，多余字段必须被拒绝。
+	if _, err := f.job(jobAcknowledgePending, `{"request_id":"x"}`, "extra-args"); err == nil {
+		t.Fatal("acknowledge-pending accepted unexpected arguments")
+	}
+
+	id := f.request("create-pending")
+	if got := f.mustJob(jobAcknowledgePending, `{}`, "clear-pending"); got != id {
+		t.Fatalf("acknowledge-pending cleared %q, want %q", got, id)
+	}
+	if _, err := f.job(jobAcknowledgePending, `{}`, "clear-again"); err == nil {
+		t.Fatal("acknowledge-pending accepted after the call was already cleared")
+	}
+}

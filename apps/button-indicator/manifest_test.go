@@ -75,11 +75,11 @@ func TestManifestUIContribution(t *testing.T) {
 	m := strings.ReplaceAll(repoFile(t, "plugin.yaml"), "\r\n", "\n")
 	for _, want := range []string{
 		"      ui:\n        apiVersion: 1",
-		"        navigation:\n          title: 工位呼叫\n          icon: bell\n          order: 50\n          route: service-desk\n          visibility: instance-enabled",
-		"        pages:\n          - id: home\n            title: 工位呼叫\n            description: 需要帮助时发起工位呼叫，处理人员确认后解除提示。",
+		"        navigation:\n          title: 工位呼叫（值班台）\n          icon: bell\n          order: 50\n          route: service-desk\n          visibility: instance-enabled",
+		"        pages:\n          - id: home\n            title: 工位呼叫（值班台）\n            description: 工位同事按下呼叫按键后，这里会收到一条待处理呼叫；处理完点「确认并解除提示」，或到工位按下确认按键，提示灯即熄灭。",
 		"              - type: status\n                title: 当前状态\n                description: 查看工位呼叫功能是否正常运行。\n                emptyText: 暂无运行状态。\n                source: instance",
 		"              - type: metrics\n                title: 最近一次呼叫\n                description: 查看最近一次呼叫的处理进度和时间。\n                emptyText: 还没有呼叫记录。\n                source: records\n                recordType: service_call",
-		"              - type: actions\n                title: 呼叫操作\n                description: 需要帮助时发起呼叫；处理完成后确认并解除提示。\n                emptyText: 当前没有可执行的操作。\n                source: manual-jobs",
+		"              - type: actions\n                title: 呼叫操作\n                description: 日常呼叫由工位按键发起；值班台也可以远程替工位发起。处理完成后点「确认并解除提示」。\n                emptyText: 当前没有可执行的操作。\n                source: manual-jobs",
 		"              - type: records\n                title: 呼叫记录\n                description: 按时间查看每次呼叫和确认情况。\n                emptyText: 还没有呼叫记录。\n                source: records\n                recordType: service_call\n                presentation: cards",
 		"              - type: form\n                title: 运行设置\n                description: 设置插件的工作方式、时间和蜂鸣提示。\n                emptyText: 暂无需要调整的设置。\n                source: config\n                fields:",
 		"                  - key: app_config.mode\n                    label: 工作模式",
@@ -89,7 +89,8 @@ func TestManifestUIContribution(t *testing.T) {
 		"                  - key: status\n                    label: 当前状态\n                    values:\n                      pending: 等待确认\n                      acknowledged: 已确认",
 		"                  - key: requested_at\n                    label: 请求时间\n                    format: time",
 		"                  - key: acknowledged_at\n                    label: 确认时间\n                    format: time\n                    hideWhenEmpty: true",
-		"                  - key: note\n                    label: 说明\n                    hideWhenEmpty: true",
+		"                  - key: source\n                    label: 来源\n                    values:\n                      button: 工位按键\n                      job: 值班台发起",
+		"                  - key: request_id\n                    label: 请求编号（按编号确认时用）\n                    hideWhenEmpty: true",
 		"                  - key: title\n                    label: 呼叫",
 		"                  - key: summary\n                    label: 处理情况",
 	} {
@@ -134,7 +135,7 @@ func TestDescribeReportsRequirements(t *testing.T) {
 	}
 	// Only bootstrap is auto-dispatched. Heartbeat remains cron-owned; the
 	// other descriptors exist for the generic management-console operation UI.
-	if len(desc.Jobs) != 3 || !jobIDs[jobBootstrap] || !jobIDs[jobRequest] || !jobIDs[jobAcknowledge] || jobIDs[jobHeartbeat] {
+	if len(desc.Jobs) != 4 || !jobIDs[jobBootstrap] || !jobIDs[jobRequest] || !jobIDs[jobAcknowledge] || !jobIDs[jobAcknowledgePending] || jobIDs[jobHeartbeat] {
 		t.Fatalf("unexpected descriptor jobs: %+v", desc.Jobs)
 	}
 	for _, job := range desc.Jobs {
@@ -200,7 +201,7 @@ func TestServiceCallJobInputSchemas(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, job := range desc.Jobs {
-		if job.ID == jobBootstrap {
+		if job.ID == jobBootstrap || job.ID == jobAcknowledgePending {
 			continue
 		}
 		var schema struct {
