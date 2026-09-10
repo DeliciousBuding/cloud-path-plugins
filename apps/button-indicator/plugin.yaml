@@ -1,0 +1,276 @@
+apiVersion: plugins.cloudpath.dev/v1alpha1
+kind: Application
+id: io.github.deliciousbuding.cloud-path-app-button-indicator
+version: 0.2.2
+license: Apache-2.0
+protocol: 1
+# Executable entrypoint. The Application Protocol v1 service is implemented in
+# cmd/cloud-path-app-button-indicator and served over the host transport.
+entrypoint: cloud-path-app-button-indicator
+compatibility:
+  # ManualOnly jobs and the generic management-console job runner require
+  # Core v0.2.15+. Earlier hosts automatically dispatch every descriptor job.
+  core: ">=0.2.29 <0.3.0"
+requirements:
+  - id: button-input
+    capability: cloudpath.dev/capability/key@1
+    cardinality: one-or-more
+    minItems: 1
+  - id: indicator
+    capability: cloudpath.dev/capability/led@1
+    cardinality: one
+  - id: sound
+    capability: cloudpath.dev/capability/buzzer@1
+    cardinality: zero-or-one
+  - id: acknowledge-input
+    capability: cloudpath.dev/capability/key@1
+    cardinality: zero-or-one
+contributes:
+  # The application id is the stable, semantic contribution id; it is distinct
+  # from the plugin id at the top of this file.
+  applications:
+    - id: button-indicator
+      title: 按键交互与工位呼叫
+      ui:
+        apiVersion: 1
+        navigation:
+          title: 工位呼叫（值班台）
+          icon: bell
+          order: 50
+          route: service-desk
+          visibility: instance-enabled
+          i18n:
+            zh-CN: 工位呼叫（值班台）
+            en-US: Workstation call desk
+        pages:
+          - id: home
+            title: 工位呼叫（值班台）
+            description: 工位同事按下呼叫按键后，这里会收到一条待处理呼叫；处理完点「确认并解除提示」，或到工位按下确认按键，提示灯即熄灭。
+            sections:
+              - type: status
+                title: 当前状态
+                description: 查看工位呼叫功能是否正常运行。
+                emptyText: 暂无运行状态。
+                source: instance
+                i18n:
+                  zh-CN: 当前状态
+                  en-US: Current status
+                  zh-CN.description: 查看工位呼叫功能是否正常运行。
+                  en-US.description: Check whether workstation calls are working normally.
+                  zh-CN.emptyText: 暂无运行状态。
+                  en-US.emptyText: No status available.
+              - type: metrics
+                title: 最近一次呼叫
+                description: 查看最近一次呼叫的处理进度和时间。
+                emptyText: 还没有呼叫记录。
+                source: records
+                recordType: service_call
+                fields:
+                  - key: status
+                    label: 当前状态
+                    values:
+                      pending: 等待确认
+                      acknowledged: 已确认
+                    i18n:
+                      zh-CN: 当前状态
+                      en-US: Current status
+                    valuesI18n:
+                      pending:
+                        zh-CN: 等待确认
+                        en-US: Awaiting confirmation
+                      acknowledged:
+                        zh-CN: 已确认
+                        en-US: Confirmed
+                  - key: requested_at
+                    label: 请求时间
+                    format: time
+                    i18n:
+                      zh-CN: 请求时间
+                      en-US: Requested at
+                  - key: acknowledged_at
+                    label: 确认时间
+                    format: time
+                    hideWhenEmpty: true
+                    i18n:
+                      zh-CN: 确认时间
+                      en-US: Confirmation time
+                  - key: source
+                    label: 来源
+                    values:
+                      button: 工位按键
+                      job: 值班台发起
+                    hideWhenEmpty: true
+                    i18n:
+                      zh-CN: 来源
+                      en-US: Source
+                    valuesI18n:
+                      button:
+                        zh-CN: 工位按键
+                        en-US: Workstation button
+                      job:
+                        zh-CN: 值班台发起
+                        en-US: Started by desk
+                  - key: note
+                    label: 说明
+                    hideWhenEmpty: true
+                    i18n:
+                      zh-CN: 说明
+                      en-US: Notes
+                i18n:
+                  zh-CN: 最近一次呼叫
+                  en-US: Latest call
+                  zh-CN.description: 查看最近一次呼叫的处理进度和时间。
+                  en-US.description: View the progress and time of the latest call.
+                  zh-CN.emptyText: 还没有呼叫记录。
+                  en-US.emptyText: No call records yet.
+              - type: actions
+                title: 呼叫操作
+                description: 日常呼叫由工位按键发起；值班台也可以远程替工位发起。处理完成后点「确认并解除提示」。
+                emptyText: 当前没有可执行的操作。
+                source: manual-jobs
+                i18n:
+                  zh-CN: 呼叫操作
+                  en-US: Call actions
+                  zh-CN.description: 日常呼叫由工位按键发起；值班台也可以远程替工位发起。处理完成后点「确认并解除提示」。
+                  en-US.description: Calls normally start from the workstation button; the desk can also start one remotely. Tap "Confirm and clear" once handled.
+                  zh-CN.emptyText: 当前没有可执行的操作。
+                  en-US.emptyText: No actions are available right now.
+              - type: records
+                title: 呼叫记录
+                description: 按时间查看每次呼叫和确认情况。
+                emptyText: 还没有呼叫记录。
+                source: records
+                recordType: service_call
+                presentation: cards
+                fields:
+                  - key: title
+                    label: 呼叫
+                    i18n:
+                      zh-CN: 呼叫
+                      en-US: Call
+                  - key: summary
+                    label: 处理情况
+                    i18n:
+                      zh-CN: 处理情况
+                      en-US: Handling status
+                  - key: status
+                    label: 状态
+                    values:
+                      pending: 等待确认
+                      acknowledged: 已确认
+                    i18n:
+                      zh-CN: 状态
+                      en-US: Status
+                    valuesI18n:
+                      pending:
+                        zh-CN: 等待确认
+                        en-US: Awaiting confirmation
+                      acknowledged:
+                        zh-CN: 已确认
+                        en-US: Confirmed
+                  - key: requested_at
+                    label: 请求时间
+                    format: time
+                    i18n:
+                      zh-CN: 请求时间
+                      en-US: Requested at
+                  - key: acknowledged_at
+                    label: 确认时间
+                    format: time
+                    hideWhenEmpty: true
+                    i18n:
+                      zh-CN: 确认时间
+                      en-US: Confirmation time
+                  - key: source
+                    label: 来源
+                    values:
+                      button: 工位按键
+                      job: 值班台发起
+                    hideWhenEmpty: true
+                    i18n:
+                      zh-CN: 来源
+                      en-US: Source
+                    valuesI18n:
+                      button:
+                        zh-CN: 工位按键
+                        en-US: Workstation button
+                      job:
+                        zh-CN: 值班台发起
+                        en-US: Started by desk
+                  - key: request_id
+                    label: 请求编号（按编号确认时用）
+                    hideWhenEmpty: true
+                    i18n:
+                      zh-CN: 请求编号（按编号确认时用）
+                      en-US: Request ID (for exact confirmation)
+                i18n:
+                  zh-CN: 呼叫记录
+                  en-US: Call records
+                  zh-CN.description: 按时间查看每次呼叫和确认情况。
+                  en-US.description: View each call and confirmation in chronological order.
+                  zh-CN.emptyText: 还没有呼叫记录。
+                  en-US.emptyText: No call records yet.
+              - type: form
+                title: 运行设置
+                description: 设置插件的工作方式、时间和蜂鸣提示。
+                emptyText: 暂无需要调整的设置。
+                source: config
+                fields:
+                  - key: app_config.mode
+                    label: 工作模式
+                    type: select
+                    description: 走路灯模式下按键切换灯位；工位呼叫模式下，绑定的「发起」按键触发呼叫，「确认」按键解除提示。
+                    enum: [walking-light, service-call]
+                    default: walking-light
+                    i18n:
+                      zh-CN: 工作模式
+                      en-US: Operating mode
+                      zh-CN.description: 走路灯模式下按键切换灯位；工位呼叫模式下，绑定的「发起」按键触发呼叫，「确认」按键解除提示。
+                      en-US.description: In walkway light mode the button switches light positions; in workstation call mode the bound request button starts a call and the bound confirm button clears it.
+                  - key: app_config.timezone
+                    label: 时区
+                    type: string
+                    description: 用于显示呼叫时间和执行定时检查，例如 Asia/Shanghai。
+                    placeholder: Asia/Shanghai
+                    default: UTC
+                    i18n:
+                      zh-CN: 时区
+                      en-US: Time zone
+                      zh-CN.description: 用于显示呼叫时间和执行定时检查，例如 Asia/Shanghai。
+                      en-US.description: Used to display call times and run scheduled checks, for example Asia/Shanghai.
+                  - key: app_config.heartbeat_cron
+                    label: 定时检查
+                    type: string
+                    description: 按 5 段格式填写检查时间，例如 */5 * * * * 表示每 5 分钟检查一次。
+                    placeholder: "*/5 * * * *"
+                    default: "*/5 * * * *"
+                    i18n:
+                      zh-CN: 定时检查
+                      en-US: Scheduled check
+                      zh-CN.description: 按 5 段格式填写检查时间，例如 */5 * * * * 表示每 5 分钟检查一次。
+                      en-US.description: Enter the check time in five-field cron format; for example, */5 * * * * checks every 5 minutes.
+                  - key: app_config.beep_on_press
+                    label: 蜂鸣提示
+                    type: boolean
+                    description: 打开后，新按键或新呼叫会短鸣一次；默认关闭。
+                    default: false
+                    i18n:
+                      zh-CN: 蜂鸣提示
+                      en-US: Buzzer alerts
+                      zh-CN.description: 打开后，新按键或新呼叫会短鸣一次；默认关闭。
+                      en-US.description: When enabled, a new button press or call beeps once; disabled by default.
+                i18n:
+                  zh-CN: 运行设置
+                  en-US: Runtime settings
+                  zh-CN.description: 设置插件的工作方式、时间和蜂鸣提示。
+                  en-US.description: Configure how the plugin works, its time zone, and buzzer alerts.
+                  zh-CN.emptyText: 暂无需要调整的设置。
+                  en-US.emptyText: No settings need attention.
+            i18n:
+              zh-CN: 工位呼叫（值班台）
+              en-US: Workstation call desk
+              zh-CN.description: 工位同事按下呼叫按键后，这里会收到一条待处理呼叫；处理完点「确认并解除提示」，或到工位按下确认按键，提示灯即熄灭。
+              en-US.description: When a workstation presses its call button, a pending call appears here. Tap "Confirm and clear", or press the confirm button at the workstation, to turn the light off.
+      i18n:
+        zh-CN: 按键交互与工位呼叫
+        en-US: Button interaction and workstation calls
