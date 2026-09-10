@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Cloudpath Authors
+
 // Command cloudpath-driver-stcb 是 STC-B Driver Plugin 的独立进程入口。
 //
 // 它读取 CloudPath Plugin Host 经环境变量注入的 launch identity，输出唯一握手行，

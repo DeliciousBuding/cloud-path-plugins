@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Cloudpath Authors
+
 // Package plugin 实现 CloudPath Driver Protocol v1 的 STC-B 驱动。
 //
 // STC-B（IAP15F2K61S2）线协议解析：Device Protocol v1 帧（见 protocol_v1.go）与

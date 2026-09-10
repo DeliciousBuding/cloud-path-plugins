@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Cloudpath Authors
+
 package plugin
 
 import "testing"

@@ -56,8 +56,8 @@ jobs:
           merge-multiple: true
       - name: List assets
         run: ls -la release-assets
-      - name: Write manifest into release
-        run: cp plugin.yaml release-assets/plugin.yaml
+      - name: Write manifest and license notices into release
+        run: cp plugin.yaml LICENSE NOTICE THIRD_PARTY_NOTICES.md release-assets/
       - uses: softprops/action-gh-release@v2
         with:
           draft: false

@@ -1,5 +1,10 @@
 # cloud-path-driver-stcb
 
+[![CI](https://github.com/DeliciousBuding/cloud-path-driver-stcb/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/DeliciousBuding/cloud-path-driver-stcb/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/DeliciousBuding/cloud-path-driver-stcb)](https://github.com/DeliciousBuding/cloud-path-driver-stcb/releases)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Go](https://img.shields.io/badge/go-1.26-00ADD8.svg)](https://go.dev/)
+
 STC-B（IAP15F2K61S2）的独立 CloudPath Driver Plugin。它把板载硬件翻译为 Device / Entity / Capability / Observation / Event / Command；CloudPath Core 不包含 STC-B、串口或药盒特例。
 
 ## Runtime chain
@@ -28,7 +33,7 @@ Driver 只依赖 CloudPath 公开 SDK，禁止 import cloud-path/internal/**。
 
 ## Install and run
 
-Release assets include `plugin.yaml`, Linux `amd64`/`arm64` and Windows `amd64` binaries, plus `.sha256` files. Download the binary matching the Edge host, verify its checksum, and install `plugin.yaml` through the Edge plugin mechanism for that Edge version.
+Release assets include `plugin.yaml`, `LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md`, Linux `amd64`/`arm64` and Windows `amd64` binaries, plus `.sha256` files. Download the binary matching the Edge host, verify its checksum, and install `plugin.yaml` through the Edge plugin mechanism for that Edge version.
 
 - Windows: install the CH340/USB serial driver and use `COMx`; Linux: the Edge account needs access to the serial device (usually membership in `dialout`).
 - Only one process may own a serial port. Stop Edge before flashing firmware, then restart it after the board returns to Full Firmware.
@@ -122,9 +127,14 @@ Alarm、compartment、服药时段不属于板载 Driver；这些业务只由 Ap
 
 - plugin id: io.github.deliciousbuding.cloud-path-driver-stcb
 - driver id: stcb
-- version: 0.2.12
+- version: 0.2.13
+- license: Apache-2.0
 - protocol: CloudPath Driver Protocol 1
 - compatibility: CloudPath Core >=0.2.0 <0.3.0
 - permission: hardware [serial]
 
 硬件验收必须记录真实现象。当前没有接入步进电机实物时，Motor 只能标 implemented/tested，physical verification 必须保持 pending。
+
+## License
+
+本项目源代码采用 [Apache License 2.0](LICENSE)。版权与第三方组件归属见 [NOTICE](NOTICE)，完整第三方许可证文本见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
