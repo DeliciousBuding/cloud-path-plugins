@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Command cloud-path-app-music-player is the executable entrypoint for the
 // Music Player CloudPath Application plugin.
 //

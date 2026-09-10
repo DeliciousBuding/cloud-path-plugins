@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package musicplayer
 
 import (
@@ -10,14 +12,14 @@ import (
 
 const maxConfigBytes = 4096
 
-// Config is intentionally empty. The version 0.3.1 contract has no business
+// Config is intentionally empty. The version 0.3.2 contract has no business
 // settings: song and note parameters belong to the manual jobs, while output
 // routing belongs to explicit capability bindings. Keeping a strict empty
 // object makes future configuration changes deliberate instead of silently
 // accepting unknown keys.
 type Config struct{}
 
-// Validate reports whether the version 0.3.1 configuration is valid. The
+// Validate reports whether the version 0.3.2 configuration is valid. The
 // empty struct has no business fields, so a successfully decoded object is
 // always valid.
 func (Config) Validate() error { return nil }

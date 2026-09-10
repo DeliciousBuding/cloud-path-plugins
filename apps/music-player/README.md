@@ -1,10 +1,13 @@
 # cloud-path-app-music-player
 
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![CI](https://github.com/DeliciousBuding/cloud-path-app-music-player/actions/workflows/ci.yml/badge.svg)](https://github.com/DeliciousBuding/cloud-path-app-music-player/actions/workflows/ci.yml)
+
 一个软件-only 的 CloudPath **Application 插件**，通过公开 Application SDK
 把内置歌曲每轮重复压成一条 `tone-sequence` 命令，把单音压成一条 `tone` 命令，并维护当前 `music_session` 状态。
 它不直接访问串口、浏览器、烧录工具或现网配置，只使用 Core 绑定后提供的实体 ID。
 
-Version **0.3.1**；需要 Core `>=0.2.29 <0.3.0` 和公开 Go SDK v0.2.15+。
+Version **0.3.2**；需要 Core `>=0.2.29 <0.3.0` 和公开 Go SDK v0.2.15+。
 仓库测试只使用 fake event stream / fake effect writer；真板或现场验收证据不在本仓库内声明。
 发布记录见 [CHANGELOG.md](CHANGELOG.md)。
 
@@ -28,7 +31,7 @@ Manifest 声明 `ui.apiVersion: 1`，安装实例后注册导航“音乐播放�
 
 ## Configuration
 
-版本 0.3.1 没有业务配置字段。`app_config` 必须是空 JSON object：
+版本 0.3.2 没有业务配置字段。`app_config` 必须是空 JSON object：
 
 ```json
 {}
@@ -124,7 +127,7 @@ Driver 收到后在本机按序执行；当序列精确匹配内置曲目时走�
 
 - 应用只依赖公开 SDK；没有 Driver ID、串口、COM3、Edge 启动、烧录或现网配置写入。
 - `sound` 是唯一必需输出；可选 `local-display` / `indicator` 缺失不阻止播放。
-- 0.3.1 不猜测 `display-text@1` 或 `led@1` 的 action/args 协议，因此即使绑定存在，
+- 0.3.2 不猜测 `display-text@1` 或 `led@1` 的 action/args 协议，因此即使绑定存在，
   当前版本也不会发送显示或 LED 命令；绑定可用性会出现在状态记录中。
 - 不保证“命令已提交”等于“硬件已发声”；只有最终 `RequestCompleted` 才改变状态。
 - 插件进程重启后，内存中的会话和幂等缓存不会自动恢复；`runtime_state_persistent=false`
@@ -149,10 +152,14 @@ python3 scripts/validate_manifest.py --self-test
 
 ## 后续 LED / display 扩展点
 
-版本 0.3.1 已接受并保留两个可选绑定，但没有假定其硬件语义。后续版本可以在不改变
+版本 0.3.2 已接受并保留两个可选绑定，但没有假定其硬件语义。后续版本可以在不改变
 `tone` 契约的前提下增加：
 
 - `local-display`：把 `queued`、`playing`、`completed`、`failed` 映射为明确的
   `display-text@1` action/args，并增加 fake writer 测试。
 - `indicator`：把会话状态映射为明确的 `led@1` action/args，并明确失败时是否复位。
 - 可选输出的缺失必须继续降级为声音-only，不得让显示或 LED 失败阻断已经排队的音符。
+
+## 许可证
+
+本项目采用 Apache License 2.0。见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。
