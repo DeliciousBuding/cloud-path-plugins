@@ -4,9 +4,21 @@ A capability-only CloudPath **Application plugin** with a default walking light
 and an opt-in **service-call / acknowledge** workflow for duty desks and
 workstation requests. It is not a medical emergency or life-safety system.
 
-Version **0.2.0** requires **Core v0.2.29+** (Core <0.3.0) and public SDK v0.2.15+.
+Version **0.2.1** requires **Core v0.2.29+** (Core <0.3.0) and public SDK v0.2.15+.
 Status: **IMPLEMENTED** — package and Application Protocol tests are not
 real-device acceptance evidence.
+
+## Installation and quick start
+
+1. Download `plugin.yaml` and the matching
+   `cloud-path-app-button-indicator_vX.Y.Z_<os>_<arch>[.exe]` asset from the
+   same GitHub Release.
+2. Verify both downloads with that Release's `checksums.txt`; do not mix a
+   manifest and binary from different versions.
+3. Install both through CloudPath Core's supported plugin installation flow.
+   The binary is hosted by Core Plugin Host, not run as a standalone service.
+4. Enable an instance, bind the required capabilities, and configure the mode
+   described below. The default remains the silent walking light.
 
 ## WebUI contribution
 
@@ -232,10 +244,11 @@ same-mode timezone/heartbeat updates are allowed.
 
 ## Development and acceptance
 
-After the v0.2.15 SDK tag is available, resolve its real checksums with
-`go mod tidy` and run:
+The repository pins the published public SDK v0.2.15. Verify its checksums
+and run the full local gate:
 
 ```bash
+go mod verify
 go build ./...
 go test ./... -count=1
 go test -race ./... -count=1

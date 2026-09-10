@@ -6,10 +6,56 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  preflight:
+    name: release preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.3'
+          cache: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify tag matches manifest
+        run: |
+          set -euo pipefail
+          version="$(awk '$1 == "version:" {print $2; exit}' plugin.yaml)"
+          test "${GITHUB_REF_NAME#v}" = "$version"
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race ./... -count=1
+
+      - name: gofmt gate
+        run: test -z "$(gofmt -l .)"
+
+      - name: No core internal imports
+        run: |
+          if grep -R "github.com/DeliciousBuding/cloud-path/internal" --include="*.go" .; then
+            echo "plugin must only depend on the public SDK"; exit 1
+          fi
+
+      - name: Manifest validator self-test
+        run: python scripts/validate_manifest.py --self-test
+
+      - name: Manifest gate
+        run: python scripts/validate_manifest.py plugin.yaml --dir .
+
   build:
+    needs: preflight
     name: build (${{ matrix.os }}/${{ matrix.arch }})
     strategy:
       fail-fast: false
@@ -54,6 +100,8 @@ jobs:
     name: publish release
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -67,14 +115,15 @@ jobs:
         run: |
           set -euo pipefail
           cd release-assets
-          sha256sum * > checksums.txt
           cp ../plugin.yaml plugin.yaml
+          sha256sum * > checksums.txt
           ls -l
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           draft: false
+          generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
             release-assets/*
