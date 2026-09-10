@@ -1,0 +1,30 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.mod
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: go mod download
+      - run: go test -race ./... -count=1
+      - run: go vet ./...
+      - run: go build ./...
+      - run: test -z "$(gofmt -l .)"
+      - run: python scripts/validate_manifest.py --self-test
+      - run: python scripts/validate_manifest.py plugin.yaml --dir .
