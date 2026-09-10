@@ -48,6 +48,12 @@ devices:
 
 Edge 把每台设备的 port/baud/name/protocol 作为 OpenDevice connection hints 注入；ExecuteRequest.device_id 决定命令目标。后一块板不得覆盖前一块板的物理绑定。
 
+### 多板目标路由
+
+`entity_id` 是 Device 内的局部标识，不是跨板设备键。每块板都会声明 `buzzer` 等同名 Entity；平台设备身份始终是 `<edge_id>/<device_id>`，应用绑定的稳定目标是 `(device_id, entity_id)`。Driver 只接收 Edge 为本次目标注入的 `ExecuteRequest.device_id`，并在 `(PluginInstanceID, DeviceID)` 隔离的串口上执行，不会把请求发到“默认板”。
+
+设备详情页和 REST/WS 命令按完整 `<edge_id>/<device_id>` 选择目标。Application binding 必须保存完整目标；Core 0.2.40+ 会按 `(device_id, entity_id)` 校验并路由。旧绑定只有 `entity_id` 时仅在唯一在线提供者下兼容；多板在线会 fail closed，并报 `entity ... is ambiguous across online devices: ...`。处理方式是重新绑定到目标设备，不能把 `EntityID` 改成 `stcb-real-1/buzzer` 绕过：Driver 不掌握 Edge 前缀，已发布的 `entity_id` 也必须保持稳定。
+
 ## Board capabilities
 
 13 个稳定 Capability、16 个硬件 Entity：
@@ -104,7 +110,7 @@ Alarm、compartment、服药时段不属于板载 Driver；这些业务只由 Ap
 
 - plugin id: io.github.deliciousbuding.cloud-path-driver-stcb
 - driver id: stcb
-- version: 0.2.11
+- version: 0.2.12
 - protocol: CloudPath Driver Protocol 1
 - compatibility: CloudPath Core >=0.2.0 <0.3.0
 - permission: hardware [serial]
