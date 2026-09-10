@@ -36,7 +36,7 @@ def manifest_defaults():
         manifest = json.loads(PLUGIN_FILE.read_text(encoding="utf-8"))
         return str(manifest["id"]), str(manifest["version"])
     except (OSError, KeyError, TypeError, ValueError):
-        return "io.github.deliciousbuding.cloud-path-app-sensor-alert", "0.1.2"
+        return "io.github.deliciousbuding.cloud-path-app-sensor-alert", "0.2.1"
 
 
 PLUGIN_ID, PLUGIN_VERSION = manifest_defaults()

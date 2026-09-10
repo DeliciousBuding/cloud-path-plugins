@@ -254,7 +254,7 @@ def validate(value):
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
         "kind": "Application",
         "id": PLUGIN_ID,
-        "version": "0.2.0",
+        "version": "0.2.1",
         "protocol": 1,
         "entrypoint": ENTRYPOINT,
         "compatibility": {"core": ">=0.2.29 <0.3.0"},
@@ -316,6 +316,16 @@ def validate_tree(root, value):
         errors.append("config schema must be a closed object")
     if set(example) != set(schema.get("properties", {})):
         errors.append("config example and schema keys differ")
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    version = value.get("version")
+    if not isinstance(version, str) or f"版本：`{version}`" not in readme:
+        errors.append("README.md version does not match the manifest")
+    core = value.get("compatibility", {}).get("core")
+    if not isinstance(core, str) or f"Core `{core}`" not in readme:
+        errors.append("README.md Core compatibility does not match the manifest")
+    changelog_path = root / "CHANGELOG.md"
+    if not changelog_path.is_file() or not isinstance(version, str) or f"## v{version} " not in changelog_path.read_text(encoding="utf-8"):
+        errors.append("CHANGELOG.md is missing the current release entry")
     return errors
 
 
