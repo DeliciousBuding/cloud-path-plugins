@@ -3,10 +3,21 @@ name: Release
 on:
   push:
     tags:
-      - '**/v*'
+      - 'v*'
+      - '*/v*'
+      - '*/*/v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag, for example apps/example/v1.2.3'
+        required: true
+        type: string
 
 permissions:
   contents: write
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
 jobs:
   release:
@@ -15,6 +26,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
       - uses: actions/setup-go@v7
         with:
           go-version: '1.26.3'
@@ -31,12 +43,13 @@ jobs:
       - name: Validate catalog and tag
         run: |
           python scripts/catalog.py --check
-          python scripts/catalog.py --resolve-tag "${{ github.ref_name }}"
+          python scripts/catalog.py --resolve-tag "$RELEASE_TAG"
       - name: Build release assets
-        run: python scripts/release.py --tag "${{ github.ref_name }}" --out dist
+        run: python scripts/release.py --tag "$RELEASE_TAG" --out dist
       - name: Publish release
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           draft: false
           prerelease: false
           generate_release_notes: true
