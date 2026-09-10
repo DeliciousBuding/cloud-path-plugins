@@ -2,6 +2,8 @@ package scheduledcompartment
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -33,8 +35,8 @@ type windowArgs struct {
 func jobDescriptors() []application.JobDescriptor {
 	return []application.JobDescriptor{
 		{ID: jobWindowCheck, Title: "检查到期未确认窗口", InputSchemaJSON: `{"type":"object","additionalProperties":false,"properties":{"window_id":{"type":"string","minLength":1,"title":"窗口 ID（可选）","description":"可留空；自动检查仍扫描全部到期窗口。"}}}`},
-		{ID: jobStartReminder, Title: "临时启动取药提醒", ManualOnly: true, InputSchemaJSON: `{"type":"object","additionalProperties":false,"required":["compartment_id","minutes","window_id"],"properties":{"compartment_id":{"type":"string","minLength":1,"title":"药格 ID","description":"填写配置 compartments 中的 id，例如 medicine；不是按键实体 ID。"},"minutes":{"type":"integer","minimum":1,"maximum":120,"title":"提醒时长（分钟）","description":"填写 1–120 的整数；截止前需由使用者确认取药。"},"window_id":{"type":"string","minLength":1,"maxLength":128,"title":"本次窗口 ID","description":"本次提醒的唯一标识，例如 trial-001；重试复用同一个。最长 128 个 UTF-8 字节，无首尾空白，不以 schedule: 开头。"}}}`},
-		{ID: jobConfirmWindow, Title: "确认指定窗口已取药", ManualOnly: true, InputSchemaJSON: `{"type":"object","additionalProperties":false,"required":["window_id"],"properties":{"window_id":{"type":"string","minLength":1,"title":"要确认的窗口 ID","description":"复制启动结果或窗口记录的完整 window_id；不要填写药格 ID，也不要替换成新窗口 ID。"}}}`},
+		{ID: jobStartReminder, Title: "临时启动取药提醒", ManualOnly: true, InputSchemaJSON: `{"type":"object","additionalProperties":false,"required":["compartment_id","minutes"],"properties":{"compartment_id":{"type":"string","minLength":1,"title":"药格 ID","description":"填写配置 compartments 中的 id，例如 medicine；不是按键实体 ID。"},"minutes":{"type":"integer","minimum":1,"maximum":120,"title":"提醒时长（分钟）","description":"填写 1–120 的整数；截止前需由使用者确认取药。"},"window_id":{"type":"string","minLength":1,"maxLength":128,"title":"本次窗口 ID（可选）","description":"通常留空，由服务端生成唯一编号并在结果中返回；只有需要沿用固定编号时才填写，例如 trial-001。重试请复用同一个 idempotency_key，服务端会返回首次生成的编号。最长 128 个 UTF-8 字节，无首尾空白，不以 schedule: 开头。"}}}`},
+		{ID: jobConfirmWindow, Title: "确认指定窗口已取药", ManualOnly: true, InputSchemaJSON: `{"type":"object","additionalProperties":false,"required":["window_id"],"properties":{"window_id":{"type":"string","minLength":1,"title":"要确认的窗口 ID","description":"通常请直接按盒子上的确认按键，无需本操作；只有无法按键时才在这里补记：复制「提醒记录」中的记录编号（窗口 ID）填入。不要填写药格 ID，也不要替换成新窗口 ID。"}}}`},
 	}
 }
 
@@ -78,7 +80,7 @@ func (s *Service) RunJob(_ context.Context, req *application.RunJobRequest) (*ap
 		if argErr == nil && (start.CompartmentID == "" || strings.TrimSpace(start.CompartmentID) != start.CompartmentID) {
 			argErr = fmt.Errorf("compartment_id must be a configured, non-empty ID without surrounding whitespace")
 		}
-		if argErr == nil && (start.WindowID == "" || len(start.WindowID) > maxLocalIDBytes || strings.TrimSpace(start.WindowID) != start.WindowID || strings.HasPrefix(start.WindowID, "schedule:")) {
+		if argErr == nil && start.WindowID != "" && (len(start.WindowID) > maxLocalIDBytes || strings.TrimSpace(start.WindowID) != start.WindowID || strings.HasPrefix(start.WindowID, "schedule:")) {
 			argErr = fmt.Errorf("window_id must be 1-128 UTF-8 bytes, have no surrounding whitespace, and not use the reserved schedule: prefix")
 		}
 		canonical = mustJSON(start)
@@ -133,16 +135,26 @@ func (s *Service) RunJob(_ context.Context, req *application.RunJobRequest) (*ap
 		if err = s.readyForEffects(req.PluginInstanceID, st); err == nil {
 			if !st.config.hasCompartment(start.CompartmentID) {
 				err = status.Errorf(status.CodeInvalidArgument, "unknown compartment_id %q", start.CompartmentID)
-			} else if w := st.windows[start.WindowID]; w != nil {
-				if w.Source != sourceManual || w.Compartment != start.CompartmentID || w.End.Sub(w.Start) != time.Duration(start.Minutes)*time.Minute {
-					err = status.Errorf(status.CodeInvalidArgument, "window_id %q was already used for a different window", start.WindowID)
+			} else {
+				// window_id is optional. The canonical idempotency args above keep
+				// the original empty value, so a retry with the same key returns the
+				// cached result (with the generated id) instead of opening a second
+				// window. Only a cache miss reaches this generation.
+				windowID := start.WindowID
+				if windowID == "" {
+					windowID = s.newManualWindowID(st)
+				}
+				if w := st.windows[windowID]; w != nil {
+					if w.Source != sourceManual || w.Compartment != start.CompartmentID || w.End.Sub(w.Start) != time.Duration(start.Minutes)*time.Minute {
+						err = status.Errorf(status.CodeInvalidArgument, "window_id %q was already used for a different window", windowID)
+					} else {
+						body = windowResult(w)
+					}
 				} else {
+					w := &windowTrack{ID: windowID, Source: sourceManual, Compartment: start.CompartmentID, Start: now, End: now.Add(time.Duration(start.Minutes) * time.Minute)}
+					effects = s.startWindow(st, w, now)
 					body = windowResult(w)
 				}
-			} else {
-				w := &windowTrack{ID: start.WindowID, Source: sourceManual, Compartment: start.CompartmentID, Start: now, End: now.Add(time.Duration(start.Minutes) * time.Minute)}
-				effects = s.startWindow(st, w, now)
-				body = windowResult(w)
 			}
 		}
 	case jobConfirmWindow:
@@ -321,6 +333,23 @@ func windowResult(w *windowTrack) string {
 
 func windowTaskID(id string) string { return jobWindowCheck + "-" + id }
 
+// newManualWindowID mints a server-generated window id for start-reminder
+// callers that omit window_id. The "manual-" prefix keeps it clear of the
+// reserved "schedule:" occurrence namespace, and any collision with a live
+// window forces a fresh draw.
+func (s *Service) newManualWindowID(st *instanceState) string {
+	for {
+		var random [16]byte
+		if _, err := rand.Read(random[:]); err != nil {
+			return fmt.Sprintf("manual-%d", s.now().UnixNano())
+		}
+		id := "manual-" + hex.EncodeToString(random[:])
+		if st.windows[id] == nil {
+			return id
+		}
+	}
+}
+
 // Core reuses the daily spec ID. A date/instant-qualified ID keeps tomorrow's
 // window independent and prevents yesterday's dashboard retry confirming it.
 func scheduleOccurrenceID(id string, start time.Time) string {
@@ -334,14 +363,20 @@ func reminderRequestID(w *windowTrack) string {
 	return reminderRequestPrefix + w.ID
 }
 
+// compartmentDisplayName is the user-facing name captured when the window
+// started. Later config edits never rename historical confirmations.
+func compartmentDisplayName(w *windowTrack) string {
+	if name := strings.TrimSpace(w.CompartmentName); name != "" {
+		return name
+	}
+	return w.Compartment
+}
+
 // Presentation belongs to the application, not Core or a device/ACK adapter.
 // Names are captured when a window starts so later config edits cannot rename
 // historical confirmations. Command results never decide the collection text.
 func windowPresentation(w *windowTrack) (string, string) {
-	name := strings.TrimSpace(w.CompartmentName)
-	if name == "" {
-		name = w.Compartment
-	}
+	name := compartmentDisplayName(w)
 	switch w.State {
 	case windowOpened:
 		if w.ReminderState == reminderSuppressed {

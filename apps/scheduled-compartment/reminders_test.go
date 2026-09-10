@@ -787,3 +787,90 @@ func TestLateCommandReceiptCannotRewriteCollectionState(t *testing.T) {
 		})
 	}
 }
+
+// missedNotificationOf extracts the single missed-window notification batch.
+func missedNotificationOf(t *testing.T, effects []*application.ApplicationEffect) *application.SendNotification {
+	t.Helper()
+	var found *application.SendNotification
+	for _, effect := range effects {
+		if notification, ok := effect.Union.(*application.SendNotification); ok {
+			found = notification
+		}
+	}
+	if found == nil {
+		t.Fatal("missing missed-window notification")
+	}
+	return found
+}
+
+func TestMissedNotificationIsChineseAndDoesNotClaimMissedDose(t *testing.T) {
+	p := newPracticalApp(t, 1)
+	p.start(t, "warn", "c1", 1)
+	p.sink.take()
+	p.advance(time.Minute)
+	resp, err := p.job(jobWindowCheck, "{}", "warn-expire")
+	requireJobResult(t, resp, err)
+	notification := missedNotificationOf(t, p.sink.take())
+
+	if notification.Title != "取药窗口到期，尚未确认" || notification.Severity != "warning" {
+		t.Fatalf("unexpected notification header: %+v", notification)
+	}
+	body := notification.Body
+	for _, want := range []string{"药格 c1", "取药窗口 warn", "已到期", "尚未收到按时取药确认", "不代表已漏服"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("notification body %q is missing %q", body, want)
+		}
+	}
+	// The old English sentence must not survive: the title and body have to be
+	// consistent, and the body must stay verifiable rather than alarming.
+	for _, forbidden := range []string{"Window ", "no on-time collection confirmation", "was taken"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("notification body still contains English text %q: %q", forbidden, body)
+		}
+	}
+}
+
+// TestManualStartGeneratesWindowIDWhenOmitted covers the dashboard default:
+// callers omit window_id, the service mints one, and the idempotency key keeps
+// a retry on the exact same window.
+func TestManualStartGeneratesWindowIDWhenOmitted(t *testing.T) {
+	p := newPracticalApp(t, 1)
+	args := `{"compartment_id":"c1","minutes":2}`
+	resp, err := p.job(jobStartReminder, args, "generated-start")
+	result := requireJobResult(t, resp, err)
+
+	windowID, _ := result["window_id"].(string)
+	if windowID == "" || !strings.HasPrefix(windowID, "manual-") || len(windowID) > maxLocalIDBytes {
+		t.Fatalf("server did not mint a bounded manual- window_id: %v", result)
+	}
+	if strings.HasPrefix(windowID, "schedule:") {
+		t.Fatalf("generated window_id used the reserved schedule: prefix: %q", windowID)
+	}
+	if result["state"] != windowOpened || result["reminder_state"] != "pending" || result["source"] != sourceManual {
+		t.Fatalf("generated window did not open through the real path: %v", result)
+	}
+	if stored := p.window(t, windowID); stored.ID != windowID {
+		t.Fatalf("generated id is not the stored window id: %+v", stored)
+	}
+	if effects := p.sink.take(); countRequestCommand(effects) != 1 {
+		t.Fatalf("generated window did not request its reminder: %+v", effects)
+	}
+
+	// Same idempotency key + same (window_id omitted) args must reuse the first
+	// result instead of opening a second window.
+	repeat, err := p.job(jobStartReminder, args, "generated-start")
+	repeatResult := requireJobResult(t, repeat, err)
+	if repeatResult["window_id"] != windowID {
+		t.Fatalf("retry minted a different id: %v vs %v", repeatResult["window_id"], windowID)
+	}
+	if len(p.svc.instance(testInstance).windows) != 1 || len(p.sink.take()) != 0 {
+		t.Fatal("retry opened a second window or re-emitted effects")
+	}
+
+	// A distinct logical operation (fresh idempotency key) mints a fresh id.
+	other, err := p.job(jobStartReminder, args, "generated-start-2")
+	otherResult := requireJobResult(t, other, err)
+	if otherResult["window_id"] == windowID {
+		t.Fatalf("distinct starts shared a generated id: %v", otherResult)
+	}
+}

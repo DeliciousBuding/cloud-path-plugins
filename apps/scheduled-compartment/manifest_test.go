@@ -246,3 +246,90 @@ func TestManifestRequirementsMirror(t *testing.T) {
 		t.Fatal("SDK dependency must match the minimum Core version")
 	}
 }
+
+// TestManifestExplainsDisplayCodesAndWindowRecords locks the usability contract
+// the audit asked for: the digit-display states get a Chinese, read-only
+// section, the window records expose their copyable id, and the per-minute
+// check task stops pretending to be the daily schedule.
+func TestManifestExplainsDisplayCodesAndWindowRecords(t *testing.T) {
+	m := strings.ReplaceAll(repoFile(t, "plugin.yaml"), "\r\n", "\n")
+	for _, want := range []string{
+		"              - type: metrics\n                source: records\n                recordType: display",
+		"                      reminder: 提醒中（待确认）",
+		"                      missed: 已超时未确认",
+		"                      idle: 显示时钟",
+		"                  - key: id\n                    label: 记录编号 / 窗口编号",
+		"                title: 窗口检查任务",
+		"                emptyText: 当前没有正在运行的检查任务。",
+	} {
+		if !strings.Contains(m, want) {
+			t.Fatalf("plugin.yaml missing usability contract %q", want)
+		}
+	}
+	for _, dishonest := range []string{"自动提醒计划", "还没有设置自动提醒计划"} {
+		if strings.Contains(m, dishonest) {
+			t.Fatalf("plugin.yaml still labels the minute-check task as %q", dishonest)
+		}
+	}
+}
+
+// TestManualJobSchemasMakeWindowIDOptionalAndGuideButtonFirst pins the dashboard
+// contract: start-reminder no longer forces operators to invent an id, while
+// confirm-window keeps the exact id and points at the physical key first.
+func TestManualJobSchemasMakeWindowIDOptionalAndGuideButtonFirst(t *testing.T) {
+	desc, err := New().Describe(context.Background())
+	if err != nil {
+		t.Fatalf("Describe: %v", err)
+	}
+	type property struct{ Title, Description string }
+	schemas := map[string]struct {
+		Required   []string            `json:"required"`
+		Properties map[string]property `json:"properties"`
+	}{}
+	for _, job := range desc.Jobs {
+		var schema struct {
+			Required   []string            `json:"required"`
+			Properties map[string]property `json:"properties"`
+		}
+		if err := json.Unmarshal([]byte(job.InputSchemaJSON), &schema); err != nil {
+			t.Fatalf("%s schema: %v", job.ID, err)
+		}
+		schemas[job.ID] = schema
+	}
+
+	start := schemas[jobStartReminder]
+	for _, required := range start.Required {
+		if required == "window_id" {
+			t.Fatal("start-reminder still requires callers to invent window_id")
+		}
+	}
+	if !strings.Contains(start.Properties["window_id"].Title, "可选") ||
+		!strings.Contains(start.Properties["window_id"].Description, "服务端") {
+		t.Fatalf("start-reminder window_id help does not explain server generation: %+v", start.Properties["window_id"])
+	}
+
+	confirm := schemas[jobConfirmWindow]
+	if !strings.Contains(confirm.Properties["window_id"].Description, "直接按盒子上的确认按键") {
+		t.Fatalf("confirm-window does not point at the physical key first: %q", confirm.Properties["window_id"].Description)
+	}
+	for _, required := range confirm.Required {
+		if required == "window_id" {
+			return
+		}
+	}
+	t.Fatal("confirm-window must keep requiring the exact window_id")
+}
+
+// TestReadmeExplainsDigitCodesAndManualFallback keeps the two audit-facing
+// explanations (digit codes, button-first confirmation) in the README.
+func TestReadmeExplainsDigitCodesAndManualFallback(t *testing.T) {
+	readme := strings.ReplaceAll(repoFile(t, "README.md"), "\r\n", "\n")
+	for _, want := range []string{
+		"00000001", "00000002", "提醒中（待确认）", "已超时未确认", "显示时钟",
+		"window_id 可省略：服务端会生成唯一编号", "直接按盒子上的确认按键",
+	} {
+		if !strings.Contains(readme, want) {
+			t.Fatalf("README missing usability explanation %q", want)
+		}
+	}
+}

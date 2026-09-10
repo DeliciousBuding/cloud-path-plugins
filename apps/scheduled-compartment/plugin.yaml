@@ -131,6 +131,13 @@ contributes:
                     i18n:
                       zh-CN: 提醒
                       en-US: Reminder
+                  - key: id
+                    label: 记录编号 / 窗口编号
+                    i18n:
+                      zh-CN: 记录编号 / 窗口编号
+                      en-US: Record ID / window ID
+                      zh-CN.description: 确认窗口时复制这里的编号；通常直接按盒子上的确认按键即可。
+                      en-US.description: Copy this ID to confirm a window from the dashboard; usually you can just press the button on the box.
                   - key: state
                     label: 状态
                     values:
@@ -181,18 +188,56 @@ contributes:
                   en-US.description: View the status, compartment, and time of each reminder.
                   zh-CN.emptyText: 还没有取药提醒记录。
                   en-US.emptyText: No medication reminder records yet.
+              - type: metrics
+                source: records
+                recordType: display
+                title: 屏幕提示状态
+                description: 只读查看本地显示或数码管现在提示什么；配置并绑定本地显示后，窗口状态变化时产生记录。数码管数字码 1/2 的含义见 README。
+                emptyText: 尚未产生显示状态记录（未配置或未绑定本地显示）。
+                fields:
+                  - key: desired_state
+                    label: 提示状态
+                    values:
+                      reminder: 提醒中（待确认）
+                      missed: 已超时未确认
+                      idle: 显示时钟
+                    i18n:
+                      zh-CN: 提示状态
+                      en-US: Displayed state
+                    valuesI18n:
+                      reminder:
+                        zh-CN: 提醒中（待确认）
+                        en-US: Reminder (awaiting confirmation)
+                      missed:
+                        zh-CN: 已超时未确认
+                        en-US: Expired, not confirmed
+                      idle:
+                        zh-CN: 显示时钟
+                        en-US: Clock
+                  - key: summary
+                    label: 说明
+                    i18n:
+                      zh-CN: 说明
+                      en-US: Details
+                i18n:
+                  zh-CN: 屏幕提示状态
+                  en-US: Display status
+                  zh-CN.description: 只读查看本地显示或数码管现在提示什么；配置并绑定本地显示后，窗口状态变化时产生记录。数码管数字码 1/2 的含义见 README。
+                  en-US.description: Read-only view of the local display or digit codes. A record appears only after a display policy and binding are configured and a window state changes. Digit codes 1/2 are documented in the README.
+                  zh-CN.emptyText: 尚未产生显示状态记录（未配置或未绑定本地显示）。
+                  en-US.emptyText: No display status record yet (no local display configured or bound).
               - type: schedule
                 source: jobs
-                title: 自动提醒计划
-                description: 查看每天自动提醒取药的时间，以及下一次提醒。
-                emptyText: 还没有设置自动提醒计划。
+                title: 窗口检查任务
+                description: 查看当前正在运行的到期检查任务：提醒窗口开启期间每分钟执行一次，确认或超时后自动取消。它由每个窗口动态创建，不是每天 08:00 这类日程；每日提醒时间请看下方「提醒设置」。
+                emptyText: 当前没有正在运行的检查任务。
                 i18n:
-                  zh-CN: 自动提醒计划
-                  en-US: Automatic reminder schedule
-                  zh-CN.description: 查看每天自动提醒取药的时间，以及下一次提醒。
-                  en-US.description: View the daily automatic medication reminder times and the next reminder.
-                  zh-CN.emptyText: 还没有设置自动提醒计划。
-                  en-US.emptyText: No automatic reminder schedule has been set.
+                  zh-CN: 窗口检查任务
+                  en-US: Window check tasks
+                  zh-CN.description: 查看当前正在运行的到期检查任务：提醒窗口开启期间每分钟执行一次，确认或超时后自动取消。它由每个窗口动态创建，不是每天 08:00 这类日程；每日提醒时间请看下方「提醒设置」。
+                  en-US.description: Shows the expiry check task that runs once a minute while a reminder window is open and is cancelled after confirmation or expiry. It is created per window, not the daily 08:00 schedule; configure daily times in Reminder settings below.
+                  zh-CN.emptyText: 当前没有正在运行的检查任务。
+                  en-US.emptyText: No window check task is currently running.
               - type: form
                 source: config
                 title: 提醒设置

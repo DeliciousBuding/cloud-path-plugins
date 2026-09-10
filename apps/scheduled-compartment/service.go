@@ -814,7 +814,7 @@ func cancelTaskEffect(windowID string) *application.CancelScheduledTask {
 func missedNotificationEffect(w *windowTrack) *application.SendNotification {
 	return &application.SendNotification{
 		Title:    "取药窗口到期，尚未确认",
-		Body:     fmt.Sprintf("Window %s for compartment %s has no on-time collection confirmation; this does not establish whether medication was taken", w.ID, w.Compartment),
+		Body:     fmt.Sprintf("药格 %s 的取药窗口 %s 已到期，尚未收到按时取药确认；这不代表已漏服，请核对实际情况。", compartmentDisplayName(w), w.ID),
 		Severity: "warning",
 	}
 }

@@ -8,9 +8,19 @@
 
 > `completed` / `completed_late` 仅表示**使用者确认取药**，不证明药物已经吞服。`opened` 是提醒窗口开始，不表示实体盒盖打开；`missed` 是截止时尚无取药确认，不足以断言使用者漏服。
 
+### 0.3.0 可用性修复（相对 0.2.10 部署）
+
+- 超时通知正文改为中文，与标题一致；仍然只陈述“窗口到期且未确认”，不宣称已漏服。
+- 网页新增只读「屏幕提示状态」，把 `display` 记录的 `reminder / missed / idle` 映射为「提醒中（待确认）」「已超时未确认」「显示时钟」；下面同时列出示例数字码 `00000001` / `00000002` 的含义。
+- 「提醒记录」直接展示记录编号/窗口编号，补记确认不必再展开原始 JSON；`confirm-window` 说明改为“通常请直接按盒子上的确认按键”。
+- `start-reminder` 的 `window_id` 改为可选，缺省由服务端生成唯一编号；显式传值、格式校验和幂等语义保持不变。
+- 「自动提醒计划」改名为「窗口检查任务」，如实显示每个窗口的每分钟检查任务（见下）。
+
 ## WebUI 贡献
 
-`plugin.yaml` 声明 `ui.apiVersion: 1`，Core 会为已启用的药盒实例生成导航“药盒提醒”和独立路由 `/apps/pillbox`。页面由通用 section 组成：实例状态、来自 `window` 记录的指标、手动操作、`window` 记录时间线、来自 `jobs.scheduled` 的计划和配置表单；`start-reminder`、`confirm-window` 只作为手动动作展示。表单覆盖药格数组、每日计划、时区和提醒音档位；显示参数仍保留在高级详情。
+`plugin.yaml` 声明 `ui.apiVersion: 1`，Core 会为已启用的药盒实例生成导航“药盒提醒”和独立路由 `/apps/pillbox`。页面由通用 section 组成：实例状态、来自 `window` 记录的“最近一次提醒”、手动操作、`window`“提醒记录”（含记录编号/窗口编号）、只读的“屏幕提示状态”（`display` 记录）、`jobs.scheduled` 的“窗口检查任务”和配置表单；`start-reminder`、`confirm-window` 只作为手动动作展示。表单覆盖药格数组、每日计划、时区和提醒音档位；显示参数仍保留在高级详情。
+
+其中“窗口检查任务”section 显示的是**每个提醒窗口的每分钟到期检查任务**（`window-check-<窗口ID>`，cron `* * * * *`），任务随窗口创建、在确认或超时后取消，所以没有打开窗口时它就是空的。它不是每天 08:00 这类日程；公开 SDK 的 `Describe` 没有声明式日程字段，无法让 `jobs.scheduled` 真实呈现每日日程，因此这里如实改名为“窗口检查任务”，而不是继续用“自动提醒计划”制造与配置表单相矛盾的显示。每日提醒时间以配置表单和 `window` 记录为准。旧的“自动提醒计划”标题已移除。
 
 ## 1. 选择按键和配置
 
@@ -70,6 +80,16 @@ STC-B 同板验收时，给取药应用预留 **key1**；**key2、key3 不绑定
 ```
 
 当前验收所用实现的公开 schema 支持三选一：`{"digits":[八个0..9整数]}`、`{"codes":[八个0..25整数]}`、`{"mode":"clock"}`。上面的八位示例只表示**状态码 1＝待确认、2＝超时未确认**，不是第 1/2 格、药物数量或槽号；`clock` 是无待处理窗口时恢复的显示模式。是否支持这些参数由实际 Capability 实现决定。
+
+数码管数字码速查（数字来自上面的可选示例，不是应用硬编码；应用只是把配置里的 `*_args` 原样下发）：
+
+| 数码管显示 | 含义 | 对应聚合状态 |
+|---|---|---|
+| `00000001` | 提醒中（待确认） | 至少一个 `opened`，且没有 `missed` |
+| `00000002` | 已超时未确认 | 至少一个 `missed` |
+| `clock` / 时钟 | 显示时钟，无待处理窗口 | 既没有 `missed` 也没有 `opened` |
+
+应用自己不生成字形或数字码，也不会把 `1/2` 解释成格号或粒数；它只校验 args 是 bounded JSON object 并原样转发。因此**数字码的取值由你的 `*_args` 决定**：上面表格只对应示例里的 `reminder_args=…1`、`missed_args=…2`。网页只读的「屏幕提示状态」section 会把 `display` 记录的 `desired_state` 映射成中文「提醒中（待确认）」「已超时未确认」「显示时钟」，所以即使不记得数字码也能看懂当前提示。语义由聚合窗口状态决定，数字码只是所选显示策略的表达方式；换一组数字码不会改变网页里的中文含义。
 
 显示选择按整个实例聚合，规则固定且简单：
 
@@ -136,12 +156,12 @@ Content-Type: application/json
 {"args_json":"<参数对象编码后的 JSON 字符串>","idempotency_key":"<本次逻辑操作的稳定键>"}
 ```
 
-请求使用 Core 的正常登录/租户鉴权。Core 限制在实例声明的 Job 内并校验 schema；应用也会校验直接 SDK 调用的参数。输入 schema 为药格 ID、提醒分钟数和窗口 ID 提供中文标题及填写说明：药格 ID 来自配置，确认窗口 ID 应复制启动结果/窗口记录，不能相互替代。
+请求使用 Core 的正常登录/租户鉴权。Core 限制在实例声明的 Job 内并校验 schema；应用也会校验直接 SDK 调用的参数。输入 schema 为药格 ID、提醒分钟数和窗口 ID 提供中文标题及填写说明：药格 ID 来自配置；`start-reminder` 的 `window_id` 可留空、由服务端生成；`confirm-window` 通常直接按盒子上的确认按键，只有无法按键时才在管理台用「提醒记录」里的记录编号补记。
 
 | Job | 是否自动 | 参数 |
 |---|---|---|
-| `start-reminder` / 临时启动取药提醒 | 否，`ManualOnly=true` | `compartment_id`、整数 `minutes`（1–120）、稳定且唯一的 `window_id` |
-| `confirm-window` / 确认指定窗口已取药 | 否，`ManualOnly=true` | 必填精确 `window_id`，不接受“当前格”“最新窗口”替代 |
+| `start-reminder` / 临时启动取药提醒 | 否，`ManualOnly=true` | `compartment_id`、整数 `minutes`（1–120）、**可选** `window_id`（留空由服务端生成并在结果中返回） |
+| `confirm-window` / 确认指定窗口已取药 | 否，`ManualOnly=true` | 必填精确 `window_id`；**通常直接按盒子上的确认按键**，只有无法按键才在管理台补记 |
 | `window-check` / 检查到期未确认窗口 | 是 | `{}`；可带 `window_id` 作上下文，仍保持扫描全部到期窗口的旧语义 |
 
 ### 开一个一分钟现场验收窗口
@@ -169,26 +189,35 @@ async function runJob(job, args, idempotencyKey) {
   return result;
 }
 
-// 只生成一次；网络结果不确定时，重试必须复用这两个 ID。
-const windowId = crypto.randomUUID();
+// window_id 可省略：服务端会生成唯一编号，并在返回的 result_json 中给出 window_id。
+// 网络结果不确定时，重试必须复用同一个 idempotency_key，服务端会返回首次生成的编号，
+// 不会开第二个窗口。
+const started = await runJob("start-reminder", {
+  compartment_id: "medicine", minutes: 1
+}, "start:trial-1");
+// started.result_json 里会包含服务端生成的 window_id。
+
+// 只有需要沿用固定编号（例如脚本里预置 trial-001）时才显式传 window_id；
+// 显式传值时行为与旧版一致。
 await runJob("start-reminder", {
-  compartment_id: "medicine", minutes: 1, window_id: windowId
-}, "start:" + windowId);
+  compartment_id: "medicine", minutes: 1, window_id: "trial-001"
+}, "start:trial-001");
 ```
 
 Job 结果会给出 `window_id`、`source=manual`、开始/截止时间、`state=opened`、`reminder_request_id=reminder-<window_id>` 和 `reminder_state=pending`。`effects_status=submitted` 仅指 Effect 已提交到流，**不代表 Core 已持久化、设备已执行、使用者已取药或已服药**。
 
-同一窗口 ID、格 ID、时长的重复启动不会延长窗口或重复提醒；同一 ID 换格/换时长会失败。同一 Job 的幂等键用于不同参数也会失败。手动 `window_id` 最多 128 个 UTF-8 字节（建议 UUID 或 ASCII ID），不能用保留前缀 `schedule:`。重复幂等键返回首次成功调用的结果快照；实时状态应看窗口记录，不把历史 `pending` 响应当成当前回执。
+同一窗口 ID、格 ID、时长的重复启动不会延长窗口或重复提醒；同一 ID 换格/换时长会失败。`window_id` 省略时由服务端生成 `manual-<随机十六进制>` 形式的唯一编号并在结果中返回；生成只发生在幂等缓存未命中时，所以用同一个 `idempotency_key` 重试会返回首次的编号和窗口。显式 `window_id` 的校验没有放宽：最多 128 个 UTF-8 字节（建议 UUID 或 ASCII ID）、无首尾空白、不能用保留前缀 `schedule:`。同一 Job 的幂等键用于不同参数也会失败。重复幂等键返回首次成功调用的结果快照；实时状态应看窗口记录，不把历史 `pending` 响应当成当前回执。
 
 ### 确认指定窗口
 
-使用者确实确认取药后，按下绑定键，或者单独执行：
+**正常用法是按下盒子上的绑定按键**；只有无法按键时才在管理台补记。补记前先到「提醒记录」section 复制该窗口的“记录编号 / 窗口编号”，然后执行：
 
 ```javascript
-await runJob("confirm-window", {window_id: windowId}, "confirm:" + windowId);
+// 通常无需本调用，直接按盒子上的确认按键即可。
+await runJob("confirm-window", {window_id: "trial-001"}, "confirm:trial-001");
 ```
 
-管理台确认记录 `confirmation_source=dashboard`；实体键确认记录 `confirmation_source=key`。两者都记录 `confirmed_at`，都不会把提醒命令的 `pending` 改成成功。
+「提醒记录」的字段现在直接包含记录 `id`，不必再展开原始 JSON；`confirm-window` 的 schema 说明也提示“通常请直接按盒子上的确认按键”。管理台确认记录 `confirmation_source=dashboard`；实体键确认记录 `confirmation_source=key`。两者都记录 `confirmed_at`，都不会把提醒命令的 `pending` 改成成功。
 
 旧窗口 ID 的确认/重试只影响旧窗口，即使同一格已有新窗口。不存在的 ID 返回 `not_found`，不会创建窗口。已经确认的窗口不重写确认来源或时间。
 
@@ -204,6 +233,8 @@ Core 按配置时区发送 `ScheduleTick`。每日计划与临时 Job 调用同�
 | `completed` | 取药确认时间位于 `[start, end)` 内 |
 | `missed` | 到期检查时尚未收到按时确认；记录 `missed_at`，发通知并取消检查任务 |
 | `completed_late` | 确认时间达到或超过 `end`；保留截止时间和迟到确认时间 |
+
+窗口判为 `missed` 时发送的通知标题是“取药窗口到期，尚未确认”，正文为“药格 <名称> 的取药窗口 <编号> 已到期，尚未收到按时取药确认；这不代表已漏服，请核对实际情况。”标题与正文都是中文，且只陈述“窗口到期且未确认”，不会宣称使用者已经漏服。
 
 Core 每分钟运行 `window-check`，所以无确认的窗口通常在截止后的下一次分钟检查记为 `missed`，不是毫秒级定时器。但确认按自身时间戳判断：**即使检查还没运行，截止时或之后的按键/管理台确认也不会算准时**。延迟到达但发生在窗口内的按键事件仍按其真实 `occurred_at` 记准时。
 
