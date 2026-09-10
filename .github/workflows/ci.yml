@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Catalog and scripts
+        run: |
+          python -m py_compile scripts/catalog.py scripts/release.py scripts/check_links.py
+          python scripts/catalog.py --check
+          python scripts/check_links.py --self-test
+          python scripts/check_links.py
+
+  modules:
+    needs: catalog
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - drivers/stcb
+          - apps/scheduled-compartment
+          - apps/button-indicator
+          - apps/music-player
+          - apps/sensor-alert
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.3'
+          cache: true
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+      - name: Format
+        working-directory: ${{ matrix.module }}
+        run: test -z "$(gofmt -l .)"
+      - name: Test
+        working-directory: ${{ matrix.module }}
+        run: go test ./... -count=1
+      - name: Vet
+        working-directory: ${{ matrix.module }}
+        run: go vet ./...
+      - name: Manifest
+        working-directory: ${{ matrix.module }}
+        run: python scripts/validate_manifest.py plugin.yaml --dir .
+      - name: Build
+        working-directory: ${{ matrix.module }}
+        run: go build ./...

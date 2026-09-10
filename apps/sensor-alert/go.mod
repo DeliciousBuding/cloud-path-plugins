@@ -1,4 +1,4 @@
-module github.com/DeliciousBuding/cloud-path-app-sensor-alert
+module github.com/DeliciousBuding/cloud-path-plugins/apps/sensor-alert
 
 go 1.26.3
 

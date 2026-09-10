@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	sensoralert "github.com/DeliciousBuding/cloud-path-app-sensor-alert"
+	sensoralert "github.com/DeliciousBuding/cloud-path-plugins/apps/sensor-alert"
 	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/application"
 	"github.com/DeliciousBuding/cloud-path/sdk/go/pluginmain"
 	"github.com/DeliciousBuding/cloud-path/sdk/go/rpc"

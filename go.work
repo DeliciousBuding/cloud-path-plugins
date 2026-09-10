@@ -1,0 +1,9 @@
+go 1.26.3
+
+use (
+	./apps/button-indicator
+	./apps/music-player
+	./apps/scheduled-compartment
+	./apps/sensor-alert
+	./drivers/stcb
+)

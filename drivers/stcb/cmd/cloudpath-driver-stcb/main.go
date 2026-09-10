@@ -21,7 +21,7 @@ import (
 	"github.com/DeliciousBuding/cloud-path/sdk/go/rpc"
 	"github.com/DeliciousBuding/cloud-path/sdk/go/transport"
 
-	"github.com/DeliciousBuding/cloud-path-driver-stcb/plugin"
+	"github.com/DeliciousBuding/cloud-path-plugins/drivers/stcb/plugin"
 )
 
 func main() {

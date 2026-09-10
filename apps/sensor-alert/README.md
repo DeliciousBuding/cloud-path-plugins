@@ -1,11 +1,12 @@
 # CloudPath Sensor Alert
 
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-[![CI](https://github.com/DeliciousBuding/cloud-path-app-sensor-alert/actions/workflows/ci.yml/badge.svg)](https://github.com/DeliciousBuding/cloud-path-app-sensor-alert/actions/workflows/ci.yml)
+[![CI](https://github.com/DeliciousBuding/cloud-path-plugins/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/DeliciousBuding/cloud-path-plugins/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/badge/release-v0.2.3-blue)](https://github.com/DeliciousBuding/cloud-path-plugins/releases/tag/apps/sensor-alert/v0.2.3)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](../../LICENSE)
 
 `io.github.deliciousbuding.cloud-path-app-sensor-alert` 是一个设备无关的 CloudPath Application Plugin。它只消费绑定实体的观测和 CapabilityEvent，再通过领域记录与通用 `tone` / `led` 命令表达告警动作，不打开串口、不访问网络、不烧录固件。
 
-版本：`0.2.2`
+版本：`0.2.3`
 Application Protocol：`1`
 要求：Core `>=0.2.29 <0.3.0`，公开 Go SDK `0.2.15+`
 发布记录见 [CHANGELOG.md](CHANGELOG.md)。
@@ -184,4 +185,4 @@ python scripts/e2e_sensor_alert.py --execute --sensor contact --recovery-mode di
 
 ## 许可证
 
-本项目采用 Apache License 2.0。见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。
+本项目采用 Apache License 2.0。见 [LICENSE](../../LICENSE) 与 [NOTICE](../../NOTICE)。

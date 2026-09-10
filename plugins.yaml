@@ -1,0 +1,33 @@
+apiVersion: plugins.cloudpath.dev/v1alpha1
+kind: PluginCatalog
+plugins:
+  - id: io.github.deliciousbuding.cloud-path-driver-stcb
+    slug: stcb
+    kind: Driver
+    path: drivers/stcb
+    tagPrefix: drivers/stcb
+    asset: cloudpath-driver-stcb
+  - id: io.github.deliciousbuding.cloud-path-app-scheduled-compartment
+    slug: scheduled-compartment
+    kind: Application
+    path: apps/scheduled-compartment
+    tagPrefix: apps/scheduled-compartment
+    asset: cloud-path-app-scheduled-compartment
+  - id: io.github.deliciousbuding.cloud-path-app-button-indicator
+    slug: button-indicator
+    kind: Application
+    path: apps/button-indicator
+    tagPrefix: apps/button-indicator
+    asset: cloud-path-app-button-indicator
+  - id: io.github.deliciousbuding.cloud-path-app-music-player
+    slug: music-player
+    kind: Application
+    path: apps/music-player
+    tagPrefix: apps/music-player
+    asset: cloud-path-app-music-player
+  - id: io.github.deliciousbuding.cloud-path-app-sensor-alert
+    slug: sensor-alert
+    kind: Application
+    path: apps/sensor-alert
+    tagPrefix: apps/sensor-alert
+    asset: cloud-path-app-sensor-alert

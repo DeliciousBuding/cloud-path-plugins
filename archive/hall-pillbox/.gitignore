@@ -1,6 +1,0 @@
-/bin/
-/dist/
-*.exe
-*.test
-*.out
-__pycache__/

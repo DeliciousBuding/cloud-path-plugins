@@ -1,4 +1,4 @@
-module github.com/DeliciousBuding/cloud-path-app-button-indicator
+module github.com/DeliciousBuding/cloud-path-plugins/apps/button-indicator
 
 go 1.26.3
 

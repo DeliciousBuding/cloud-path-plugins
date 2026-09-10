@@ -1,0 +1,19 @@
+# Build outputs
+/.test-release/
+/dist/
+**/dist/
+*.exe
+*.test
+
+# Python
+__pycache__/
+*.pyc
+
+# Go workspace
+go.work.sum
+
+# Local editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,4 +1,4 @@
-module github.com/DeliciousBuding/cloud-path-app-scheduled-compartment
+module github.com/DeliciousBuding/cloud-path-plugins/apps/scheduled-compartment
 
 go 1.26.3
 

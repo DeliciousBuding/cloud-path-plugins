@@ -1,4 +1,4 @@
-module github.com/DeliciousBuding/cloud-path-app-hall-pillbox
+module github.com/DeliciousBuding/cloud-path-plugins/archive/hall-pillbox
 
 go 1.26.3
 

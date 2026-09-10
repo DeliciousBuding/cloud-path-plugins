@@ -1,9 +1,7 @@
 # 霍尔药盒 2.0（Hall Pillbox）
 
-[![CI](https://github.com/DeliciousBuding/cloud-path-app-hall-pillbox/actions/workflows/ci.yml/badge.svg)](https://github.com/DeliciousBuding/cloud-path-app-hall-pillbox/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/DeliciousBuding/cloud-path-app-hall-pillbox)](https://github.com/DeliciousBuding/cloud-path-app-hall-pillbox/releases)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Go](https://img.shields.io/github/go-mod/go-version/DeliciousBuding/cloud-path-app-hall-pillbox)](go.mod)
+[![Archived](https://img.shields.io/badge/status-archived-lightgrey)](../../README.md#归档)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](../../LICENSE)
 
 把霍尔开盖传感器和可选 K1 按键变成药盒确认输入：按每日计划或管理台操作启动提醒窗口，记录按时确认、超时未确认和迟到确认，并跟踪蜂鸣器/显示命令的真实回执。
 
@@ -152,4 +150,4 @@ python scripts/e2e_hall_pillbox.py --execute --takeover-box-prod --allow-audible
 
 ## License
 
-First-party code is licensed under the Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). The CloudPath SDK dependency remains under the MIT License; its notice is included in `NOTICE`.
+First-party code is licensed under the Apache License 2.0. See [LICENSE](../../LICENSE) and [NOTICE](../../NOTICE). The historical CloudPath SDK dependency remains under the MIT License; its notice is included in `THIRD_PARTY_NOTICES.md`.

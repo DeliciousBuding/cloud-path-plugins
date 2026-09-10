@@ -23,7 +23,7 @@ import (
 // Manifest identity. These must mirror plugin.yaml.
 const (
 	pluginIDValue = "io.github.deliciousbuding.cloud-path-app-button-indicator"
-	pluginVersion = "0.2.2"
+	pluginVersion = "0.2.3"
 
 	jobBootstrap  = "bootstrap"
 	jobHeartbeat  = "indicator-heartbeat"

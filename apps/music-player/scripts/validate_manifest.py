@@ -119,7 +119,7 @@ def validate(value):
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
         "kind": "Application",
         "id": PLUGIN_ID,
-        "version": "0.3.2",
+        "version": "0.3.3",
         "license": "Apache-2.0",
         "protocol": 1,
         "entrypoint": ENTRYPOINT,
@@ -162,7 +162,7 @@ def validate_tree(root, value):
     if mirror != {"requirements": REQUIREMENTS}:
         errors.append("requirements.yaml does not match the manifest")
     module = (root / "go.mod").read_text(encoding="utf-8")
-    if not re.search(r'^module github.com/DeliciousBuding/cloud-path-app-music-player$', module, re.M):
+    if not re.search(r'^module github.com/DeliciousBuding/cloud-path-plugins/apps/music-player$', module, re.M):
         errors.append("wrong Go module identity")
     if not re.search(r'^require github.com/DeliciousBuding/cloud-path v0\.2\.15$', module, re.M):
         errors.append("go.mod must pin the public Core v0.2.15 SDK")

@@ -1,4 +1,4 @@
-module github.com/DeliciousBuding/cloud-path-app-music-player
+module github.com/DeliciousBuding/cloud-path-plugins/apps/music-player
 
 go 1.26.3
 

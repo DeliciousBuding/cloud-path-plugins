@@ -1,4 +1,4 @@
-module github.com/DeliciousBuding/cloud-path-app-environment-guard
+module github.com/DeliciousBuding/cloud-path-plugins/archive/environment-guard
 
 go 1.26.3
 

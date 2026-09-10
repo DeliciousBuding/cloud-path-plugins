@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '**/v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.3'
+          cache: true
+          cache-dependency-path: |
+            drivers/stcb/go.sum
+            apps/scheduled-compartment/go.sum
+            apps/button-indicator/go.sum
+            apps/music-player/go.sum
+            apps/sensor-alert/go.sum
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate catalog and tag
+        run: |
+          python scripts/catalog.py --check
+          python scripts/catalog.py --resolve-tag "${{ github.ref_name }}"
+      - name: Build release assets
+        run: python scripts/release.py --tag "${{ github.ref_name }}" --out dist
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: dist/*

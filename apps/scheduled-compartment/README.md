@@ -1,11 +1,12 @@
 # 取药提醒（Scheduled Compartment）
 
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-[![CI](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment/actions/workflows/ci.yml/badge.svg)](https://github.com/DeliciousBuding/cloud-path-app-scheduled-compartment/actions/workflows/ci.yml)
+[![CI](https://github.com/DeliciousBuding/cloud-path-plugins/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/DeliciousBuding/cloud-path-plugins/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/badge/release-v0.3.3-blue)](https://github.com/DeliciousBuding/cloud-path-plugins/releases/tag/apps/scheduled-compartment/v0.3.3)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](../../LICENSE)
 
 把一个或多个按键变成**取药确认**输入：按每日计划或管理台操作开启提醒窗口，记录按时确认、到期未确认、迟到确认，以及提醒命令的实际回执。
 
-**版本 0.3.2；需要 Core >=0.2.29 且 <0.3.0，公开 Go SDK v0.2.15+。** 两个用户操作依赖 `JobDescriptor.ManualOnly`，不能放到不识别该字段的旧 Core 上运行，否则旧的分钟调度器可能把用户操作当自动任务。
+**版本 0.3.3；需要 Core >=0.2.29 且 <0.3.0，公开 Go SDK v0.2.15+。** 两个用户操作依赖 `JobDescriptor.ManualOnly`，不能放到不识别该字段的旧 Core 上运行，否则旧的分钟调度器可能把用户操作当自动任务。
 
 状态：`IMPLEMENTED`。仓库测试覆盖内存协议、业务状态机和失败边界；不代表管理台 HTTP、真实设备或现场验收已经通过。应用不直接打开设备、串口或网络连接，只通过公开 SDK 请求已绑定的 Capability。
 
@@ -306,4 +307,4 @@ go build -o bin/cloud-path-app-scheduled-compartment ./cmd/cloud-path-app-schedu
 
 ## 许可证
 
-本项目采用 Apache License 2.0。见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。
+本项目采用 Apache License 2.0。见 [LICENSE](../../LICENSE) 与 [NOTICE](../../NOTICE)。

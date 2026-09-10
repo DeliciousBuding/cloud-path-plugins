@@ -18,7 +18,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/DeliciousBuding/cloud-path-app-scheduled-compartment"
+	"github.com/DeliciousBuding/cloud-path-plugins/apps/scheduled-compartment"
 	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/application"
 	"github.com/DeliciousBuding/cloud-path/sdk/go/pluginmain"
 	"github.com/DeliciousBuding/cloud-path/sdk/go/rpc"

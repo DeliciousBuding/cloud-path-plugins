@@ -1,9 +1,7 @@
 # Environment Guard
 
-[![CI](https://github.com/DeliciousBuding/cloud-path-app-environment-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/DeliciousBuding/cloud-path-app-environment-guard/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/DeliciousBuding/cloud-path-app-environment-guard)](https://github.com/DeliciousBuding/cloud-path-app-environment-guard/releases)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Go](https://img.shields.io/github/go-mod/go-version/DeliciousBuding/cloud-path-app-environment-guard)](go.mod)
+[![Archived](https://img.shields.io/badge/status-archived-lightgrey)](../../README.md#归档)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](../../LICENSE)
 
 设备无关的 CloudPath Application 插件，版本 **0.1.7**。将已绑定的温度、光照观测变成工位环境快照和阈值变化记录，不轮询设备，不请求设备动作，不发送系统外通知。
 
@@ -152,7 +150,7 @@ go build -trimpath -o bin/cloud-path-app-environment-guard ./cmd/cloud-path-app-
 
 Windows 最后一条输出名加 .exe。插件由 Host 注入身份/传输启动，使用 public `pluginmain.Run + application.NewRPCServer`；不自行选择端点，无独立设备、网络、文件或 secret 权限。
 
-准备安装物时需同版本 `plugin.yaml`、本平台入口二进制及 SHA-256。工作流 [release.yml](.github/workflows/release.yml) 发布六个 OS/arch 二进制、manifest 和 checksums.txt。安装前请从对应 GitHub Release 核对 digest：
+准备安装物时需同版本 `plugin.yaml`、本平台入口二进制及 SHA-256。原独立仓的 Release 流程已随归档停止，历史安装物仍应从对应 Release 核对 digest：
 
 ```bash
 cloudpath plugin install <repository-url-or-id> --digest sha256:<binary-digest> --yes
@@ -181,4 +179,4 @@ cloudpath plugin enable io.github.deliciousbuding.cloud-path-app-environment-gua
 
 ## License
 
-First-party code is licensed under the Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). The CloudPath SDK dependency remains under the MIT License; its notice is included in `NOTICE`.
+First-party code is licensed under the Apache License 2.0. See [LICENSE](../../LICENSE) and [NOTICE](../../NOTICE). The historical CloudPath SDK dependency remains under the MIT License; its notice is included in `THIRD_PARTY_NOTICES.md`.

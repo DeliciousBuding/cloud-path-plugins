@@ -2,6 +2,11 @@
 
 本文件记录用户可见变化。较早版本可在 Git tag 和 GitHub Releases 中查看。
 
+## v0.3.3 - 2026-09-10
+
+- 迁移到 CloudPath 插件 monorepo；模块路径与发布 tag 改为 `cloud-path-plugins/<path>` / `<path>/v<version>`。
+- 不修改运行时行为；发布资产继续包含二进制、`plugin.yaml`、`LICENSE`、`NOTICE` 与 checksums。
+
 ## v0.3.2 - 2026-09-10
 
 - 迁移到 Apache License 2.0，并补齐 NOTICE、README 许可证信息与发布元数据。
