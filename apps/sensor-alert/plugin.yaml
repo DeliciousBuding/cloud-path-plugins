@@ -1,0 +1,474 @@
+{
+  "apiVersion": "plugins.cloudpath.dev/v1alpha1",
+  "kind": "Application",
+  "id": "io.github.deliciousbuding.cloud-path-app-sensor-alert",
+  "version": "0.2.2",
+  "license": "Apache-2.0",
+  "protocol": 1,
+  "entrypoint": "cloud-path-app-sensor-alert",
+  "compatibility": {
+    "core": ">=0.2.29 <0.3.0"
+  },
+  "permissions": {
+    "hardware": [],
+    "network": [],
+    "filesystem": [],
+    "secrets": []
+  },
+  "requirements": [
+    {
+      "id": "temperature",
+      "capability": "cloudpath.dev/capability/temperature@1",
+      "cardinality": "zero-or-one"
+    },
+    {
+      "id": "illuminance",
+      "capability": "cloudpath.dev/capability/illuminance@1",
+      "cardinality": "zero-or-one"
+    },
+    {
+      "id": "contact",
+      "capability": "cloudpath.dev/capability/hall@1",
+      "cardinality": "zero-or-one"
+    },
+    {
+      "id": "vibration",
+      "capability": "cloudpath.dev/capability/vibration@1",
+      "cardinality": "zero-or-one"
+    },
+    {
+      "id": "alert-sound",
+      "capability": "cloudpath.dev/capability/buzzer@1",
+      "cardinality": "zero-or-one"
+    },
+    {
+      "id": "alert-light",
+      "capability": "cloudpath.dev/capability/led@1",
+      "cardinality": "zero-or-one"
+    }
+  ],
+  "contributes": {
+    "applications": [
+      {
+        "id": "sensor-alert",
+        "title": "环境与安防告警",
+        "ui": {
+          "apiVersion": 1,
+          "navigation": {
+            "title": "环境告警",
+            "icon": "bell-ring",
+            "order": 40,
+            "route": "sensor-alert",
+            "visibility": "always",
+            "i18n": {
+              "zh-CN": "环境告警",
+              "en-US": "Environment alerts"
+            }
+          },
+          "pages": [
+            {
+              "id": "home",
+              "title": "环境与安防告警",
+              "description": "监测温度、光照、接触和振动，达到设定条件时发出声光提醒，并记录最近一次告警。",
+              "sections": [
+                {
+                  "type": "status",
+                  "title": "运行状态",
+                  "description": "查看告警功能是否已经启用，以及设备和平台是否连接正常。",
+                  "emptyText": "暂无运行状态信息。",
+                  "source": "instance",
+                  "i18n": {
+                    "zh-CN": "运行状态",
+                    "en-US": "Status",
+                    "zh-CN.description": "查看告警功能是否已经启用，以及设备和平台是否连接正常。",
+                    "en-US.description": "Check whether alerts are enabled and whether the device and platform are connected normally.",
+                    "zh-CN.emptyText": "暂无运行状态信息。",
+                    "en-US.emptyText": "No status information available."
+                  }
+                },
+                {
+                  "type": "metrics",
+                  "title": "当前告警",
+                  "description": "显示最近一次告警的状态、传感器、当前值和触发时间。",
+                  "emptyText": "还没有告警。若尚未布防，请先在「告警开关」中布防。",
+                  "source": "records",
+                  "recordType": "alert",
+                  "fields": [
+                    {
+                      "key": "state",
+                      "label": "告警状态",
+                      "values": {
+                        "armed": "已启用",
+                        "triggered": "已触发",
+                        "recovered": "已恢复",
+                        "disarmed": "已停用"
+                      },
+                      "hideWhenEmpty": true,
+                      "i18n": {
+                        "zh-CN": "告警状态",
+                        "en-US": "Alert status"
+                      },
+                      "valuesI18n": {
+                        "armed": {
+                          "zh-CN": "已启用",
+                          "en-US": "Enabled"
+                        },
+                        "triggered": {
+                          "zh-CN": "已触发",
+                          "en-US": "Triggered"
+                        },
+                        "recovered": {
+                          "zh-CN": "已恢复",
+                          "en-US": "Recovered"
+                        },
+                        "disarmed": {
+                          "zh-CN": "已停用",
+                          "en-US": "Disabled"
+                        }
+                      }
+                    },
+                    {
+                      "key": "sensor",
+                      "label": "传感器",
+                      "values": {
+                        "temperature": "温度",
+                        "illuminance": "光照",
+                        "contact": "接触",
+                        "vibration": "振动"
+                      },
+                      "hideWhenEmpty": true,
+                      "i18n": {
+                        "zh-CN": "传感器",
+                        "en-US": "Sensor"
+                      },
+                      "valuesI18n": {
+                        "temperature": {
+                          "zh-CN": "温度",
+                          "en-US": "Temperature"
+                        },
+                        "illuminance": {
+                          "zh-CN": "光照",
+                          "en-US": "Light"
+                        },
+                        "contact": {
+                          "zh-CN": "接触",
+                          "en-US": "Contact"
+                        },
+                        "vibration": {
+                          "zh-CN": "振动",
+                          "en-US": "Vibration"
+                        }
+                      }
+                    },
+                    {
+                      "key": "value",
+                      "label": "当前值",
+                      "format": "number",
+                      "hideWhenEmpty": true,
+                      "i18n": {
+                        "zh-CN": "当前值",
+                        "en-US": "Current value"
+                      }
+                    },
+                    {
+                      "key": "triggered_at",
+                      "label": "触发时间",
+                      "format": "time",
+                      "hideWhenEmpty": true,
+                      "i18n": {
+                        "zh-CN": "触发时间",
+                        "en-US": "Triggered at"
+                      }
+                    }
+                  ],
+                  "i18n": {
+                    "zh-CN": "当前告警",
+                    "en-US": "Current alert",
+                    "zh-CN.description": "显示最近一次告警的状态、传感器、当前值和触发时间。",
+                    "en-US.description": "Show the status, sensor, current value, and trigger time of the latest alert.",
+                    "zh-CN.emptyText": "还没有告警。若尚未布防，请先在「告警开关」中布防。",
+                    "en-US.emptyText": "No alert yet. If monitoring is not armed, arm it in Alert switch first."
+                  }
+                },
+                {
+                  "type": "actions",
+                  "title": "告警开关",
+                  "description": "配置默认会自动布防；也可手动点击“布防告警”启用，或点击“撤防告警”停用。",
+                  "emptyText": "暂无可执行的告警操作。",
+                  "source": "manual-jobs",
+                  "i18n": {
+                    "zh-CN": "告警开关",
+                    "en-US": "Alert switch",
+                    "zh-CN.description": "配置默认会自动布防；也可手动点击“布防告警”启用，或点击“撤防告警”停用。",
+                    "en-US.description": "Configuration auto-arms by default; you can also Arm or Disarm alerts manually.",
+                    "zh-CN.emptyText": "暂无可执行的告警操作。",
+                    "en-US.emptyText": "No alert actions are available."
+                  }
+                },
+                {
+                  "type": "records",
+                  "title": "最近告警",
+                  "description": "查看最近一次告警发生在哪个传感器、当时是什么状态、数值和触发阈值。",
+                  "emptyText": "还没有告警。若尚未布防，请先点击“布防告警”开始监测；已布防但还没有触发时会显示在这里。",
+                  "source": "records",
+                  "recordType": "alert",
+                  "presentation": "timeline",
+                  "fields": [
+                    {
+                      "key": "sensor",
+                      "label": "传感器",
+                      "values": {
+                        "temperature": "温度",
+                        "illuminance": "光照",
+                        "contact": "接触",
+                        "vibration": "振动"
+                      },
+                      "hideWhenEmpty": true,
+                      "i18n": {
+                        "zh-CN": "传感器",
+                        "en-US": "Sensor"
+                      },
+                      "valuesI18n": {
+                        "temperature": {
+                          "zh-CN": "温度",
+                          "en-US": "Temperature"
+                        },
+                        "illuminance": {
+                          "zh-CN": "光照",
+                          "en-US": "Light"
+                        },
+                        "contact": {
+                          "zh-CN": "接触",
+                          "en-US": "Contact"
+                        },
+                        "vibration": {
+                          "zh-CN": "振动",
+                          "en-US": "Vibration"
+                        }
+                      }
+                    },
+                    {
+                      "key": "state",
+                      "label": "告警状态",
+                      "values": {
+                        "armed": "已启用",
+                        "triggered": "已触发",
+                        "recovered": "已恢复",
+                        "disarmed": "已停用"
+                      },
+                      "hideWhenEmpty": true,
+                      "i18n": {
+                        "zh-CN": "告警状态",
+                        "en-US": "Alert status"
+                      },
+                      "valuesI18n": {
+                        "armed": {
+                          "zh-CN": "已启用",
+                          "en-US": "Enabled"
+                        },
+                        "triggered": {
+                          "zh-CN": "已触发",
+                          "en-US": "Triggered"
+                        },
+                        "recovered": {
+                          "zh-CN": "已恢复",
+                          "en-US": "Recovered"
+                        },
+                        "disarmed": {
+                          "zh-CN": "已停用",
+                          "en-US": "Disabled"
+                        }
+                      }
+                    },
+                    {
+                      "key": "value",
+                      "label": "当前值",
+                      "format": "number",
+                      "hideWhenEmpty": true,
+                      "i18n": {
+                        "zh-CN": "当前值",
+                        "en-US": "Current value"
+                      }
+                    },
+                    {
+                      "key": "threshold",
+                      "label": "触发阈值",
+                      "format": "number",
+                      "hideWhenEmpty": true,
+                      "i18n": {
+                        "zh-CN": "触发阈值",
+                        "en-US": "Trigger threshold"
+                      }
+                    },
+                    {
+                      "key": "triggered_at",
+                      "label": "触发时间",
+                      "format": "time",
+                      "hideWhenEmpty": true,
+                      "i18n": {
+                        "zh-CN": "触发时间",
+                        "en-US": "Triggered at"
+                      }
+                    }
+                  ],
+                  "i18n": {
+                    "zh-CN": "最近告警",
+                    "en-US": "Recent alerts",
+                    "zh-CN.description": "查看最近一次告警发生在哪个传感器、当时是什么状态、数值和触发阈值。",
+                    "en-US.description": "View the latest alert's sensor, status, value, and trigger threshold.",
+                    "zh-CN.emptyText": "还没有告警。若尚未布防，请先点击“布防告警”开始监测；已布防但还没有触发时会显示在这里。",
+                    "en-US.emptyText": "No alerts yet. If monitoring is not armed, choose Arm alerts first; once armed, the latest alert appears here."
+                  }
+                },
+                {
+                  "type": "form",
+                  "title": "告警设置",
+                  "description": "设置触发告警的条件，以及触发后如何提醒。",
+                  "emptyText": "暂无可配置项。",
+                  "source": "config",
+                  "fields": [
+                    {
+                      "key": "app_config.auto_arm",
+                      "label": "自动布防",
+                      "type": "boolean",
+                      "description": "打开后，配置生效（含插件重启后）会自动布防并开始监测；关闭后需要手动点击“布防告警”。",
+                      "default": true,
+                      "i18n": {
+                        "zh-CN": "自动布防",
+                        "en-US": "Auto arm",
+                        "zh-CN.description": "打开后，配置生效（含插件重启后）会自动布防并开始监测；关闭后需要手动点击“布防告警”。",
+                        "en-US.description": "When enabled, applying the configuration (including after a plugin restart) arms monitoring automatically; when disabled, choose Arm alerts manually."
+                      }
+                    },
+                    {
+                      "key": "app_config.temperature_min",
+                      "label": "最低温度（传感器单位）",
+                      "type": "number",
+                      "description": "低于这个温度时触发告警；按传感器原始单位比较，不做单位换算。",
+                      "default": 18,
+                      "i18n": {
+                        "zh-CN": "最低温度（传感器单位）",
+                        "en-US": "Min temperature (sensor units)",
+                        "zh-CN.description": "低于这个温度时触发告警；按传感器原始单位比较，不做单位换算。",
+                        "en-US.description": "Trigger when the temperature drops below this value; compared in the sensor's raw units without conversion."
+                      }
+                    },
+                    {
+                      "key": "app_config.temperature_max",
+                      "label": "最高温度（传感器单位）",
+                      "type": "number",
+                      "description": "高于这个温度时触发告警；按传感器原始单位比较，不做单位换算。",
+                      "default": 28,
+                      "i18n": {
+                        "zh-CN": "最高温度（传感器单位）",
+                        "en-US": "Max temperature (sensor units)",
+                        "zh-CN.description": "高于这个温度时触发告警；按传感器原始单位比较，不做单位换算。",
+                        "en-US.description": "Trigger when the temperature rises above this value; compared in the sensor's raw units without conversion."
+                      }
+                    },
+                    {
+                      "key": "app_config.light_min",
+                      "label": "最低光照（原始读数）",
+                      "type": "number",
+                      "description": "低于这个数值时触发告警；数值为传感器原始读数（未标定），留空表示不检查。",
+                      "i18n": {
+                        "zh-CN": "最低光照（原始读数）",
+                        "en-US": "Min light (raw reading)",
+                        "zh-CN.description": "低于这个数值时触发告警；数值为传感器原始读数（未标定），留空表示不检查。",
+                        "en-US.description": "Trigger when light drops below this value; the number is the sensor's raw, uncalibrated reading. Leave empty to skip."
+                      }
+                    },
+                    {
+                      "key": "app_config.light_max",
+                      "label": "最高光照（原始读数）",
+                      "type": "number",
+                      "description": "高于这个数值时触发告警；数值为传感器原始读数（未标定），留空表示不检查。",
+                      "i18n": {
+                        "zh-CN": "最高光照（原始读数）",
+                        "en-US": "Max light (raw reading)",
+                        "zh-CN.description": "高于这个数值时触发告警；数值为传感器原始读数（未标定），留空表示不检查。",
+                        "en-US.description": "Trigger when light rises above this value; the number is the sensor's raw, uncalibrated reading. Leave empty to skip."
+                      }
+                    },
+                    {
+                      "key": "app_config.contact_enabled",
+                      "label": "接触告警",
+                      "type": "boolean",
+                      "description": "打开后，门、盖或窗被打开时触发告警。",
+                      "default": false,
+                      "i18n": {
+                        "zh-CN": "接触告警",
+                        "en-US": "Contact alert",
+                        "zh-CN.description": "打开后，门、盖或窗被打开时触发告警。",
+                        "en-US.description": "When enabled, trigger an alert when a door, lid, or window is opened."
+                      }
+                    },
+                    {
+                      "key": "app_config.vibration_enabled",
+                      "label": "振动告警",
+                      "type": "boolean",
+                      "description": "打开后，检测到明显振动时触发告警。",
+                      "default": false,
+                      "i18n": {
+                        "zh-CN": "振动告警",
+                        "en-US": "Vibration alert",
+                        "zh-CN.description": "打开后，检测到明显振动时触发告警。",
+                        "en-US.description": "When enabled, trigger an alert when significant vibration is detected."
+                      }
+                    },
+                    {
+                      "key": "app_config.cooldown_s",
+                      "label": "重复提醒间隔（秒）",
+                      "type": "integer",
+                      "description": "同一问题再次触发前至少等待多久；填 0 表示不限制。",
+                      "minimum": 0,
+                      "maximum": 86400,
+                      "default": 60,
+                      "i18n": {
+                        "zh-CN": "重复提醒间隔（秒）",
+                        "en-US": "Repeat alert interval (seconds)",
+                        "zh-CN.description": "同一问题再次触发前至少等待多久；填 0 表示不限制。",
+                        "en-US.description": "Minimum wait before the same issue can trigger again; 0 means no limit."
+                      }
+                    },
+                    {
+                      "key": "app_config.silent",
+                      "label": "静音提醒",
+                      "type": "boolean",
+                      "description": "打开后只亮指示灯，不发出提示音。",
+                      "default": false,
+                      "i18n": {
+                        "zh-CN": "静音提醒",
+                        "en-US": "Silent alerts",
+                        "zh-CN.description": "打开后只亮指示灯，不发出提示音。",
+                        "en-US.description": "When enabled, only the indicator light turns on; no alert sound is emitted."
+                      }
+                    }
+                  ],
+                  "i18n": {
+                    "zh-CN": "告警设置",
+                    "en-US": "Alert settings",
+                    "zh-CN.description": "设置触发告警的条件，以及触发后如何提醒。",
+                    "en-US.description": "Configure alert trigger conditions and how alerts are delivered.",
+                    "zh-CN.emptyText": "暂无可配置项。",
+                    "en-US.emptyText": "No settings available."
+                  }
+                }
+              ],
+              "i18n": {
+                "zh-CN": "环境与安防告警",
+                "en-US": "Environment & Safety Alerts",
+                "zh-CN.description": "监测温度、光照、接触和振动，达到设定条件时发出声光提醒，并记录最近一次告警。",
+                "en-US.description": "Monitor temperature, light, contact, and vibration; issue an audible and visual alert when configured conditions are met, and record the latest alert."
+              }
+            }
+          ]
+        },
+        "i18n": {
+          "zh-CN": "环境与安防告警",
+          "en-US": "Environment & Safety Alerts"
+        }
+      }
+    ]
+  }
+}
