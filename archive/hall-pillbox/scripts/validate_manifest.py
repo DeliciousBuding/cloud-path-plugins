@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Validate a CloudPath plugin manifest and scan Go sources for internal imports.
 
 This is a deliberate, stdlib-only parser for the *current* plugin.yaml shape.

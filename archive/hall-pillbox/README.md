@@ -1,8 +1,13 @@
 # 霍尔药盒 2.0（Hall Pillbox）
 
+[![CI](https://github.com/DeliciousBuding/cloud-path-app-hall-pillbox/actions/workflows/ci.yml/badge.svg)](https://github.com/DeliciousBuding/cloud-path-app-hall-pillbox/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/DeliciousBuding/cloud-path-app-hall-pillbox)](https://github.com/DeliciousBuding/cloud-path-app-hall-pillbox/releases)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Go](https://img.shields.io/github/go-mod/go-version/DeliciousBuding/cloud-path-app-hall-pillbox)](go.mod)
+
 把霍尔开盖传感器和可选 K1 按键变成药盒确认输入：按每日计划或管理台操作启动提醒窗口，记录按时确认、超时未确认和迟到确认，并跟踪蜂鸣器/显示命令的真实回执。
 
-**版本 0.1.9；需要 Core >=0.2.29 且 <0.3.0。** 静音 `0/0` 的 `start-window → display reminder ACK → dashboard confirm → display idle ACK` 已完成生产真板 E2E，状态为 `VERIFIED`；物理磁铁 `opening/close-ignore/away` 序列仍需人工操作，状态为 `PLANNED`。仓库测试另覆盖内存协议、状态机、绑定和 effect 失败边界。
+**版本 0.1.10；需要 Core >=0.2.29 且 <0.3.0。** 静音 `0/0` 的 `start-window → display reminder ACK → dashboard confirm → display idle ACK` 已完成生产真板 E2E，状态为 `VERIFIED`；物理磁铁 `opening/close-ignore/away` 序列仍需人工操作，状态为 `PLANNED`。仓库测试另覆盖内存协议、状态机、绑定和 effect 失败边界。
 
 本应用是软件-only Application 插件：不访问 COM3、不启动/停止 Edge、不烧录、不修改现网配置。它只通过公开 SDK 请求已绑定的 Capability。
 
@@ -144,3 +149,7 @@ python scripts/e2e_hall_pillbox.py --execute --takeover-box-prod --allow-audible
 `scheduled-compartment` 用按键/多 compartment 表达取药确认，适合已有按键的格子；本应用把霍尔开盖作为第一确认源，把 K1 作为兜底，适合“开盖即确认”的单药盒。
 
 两者都只依赖公开 Capability，不引用 Driver ID、端口或板卡型号。不要把 STC-B、COM3、A3144 极性或厂商串口协议写进本应用；这些属于 Driver/部署层。若未来需要多药格、每格独立霍尔或每格独立显示，应升级配置结构和状态机，而不是在 Core 中增加药盒特例。
+
+## License
+
+First-party code is licensed under the Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). The CloudPath SDK dependency remains under the MIT License; its notice is included in `NOTICE`.

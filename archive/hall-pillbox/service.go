@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package hallpillbox
 
 import (
@@ -16,7 +18,7 @@ import (
 
 const (
 	pluginIDValue = "io.github.deliciousbuding.cloud-path-app-hall-pillbox"
-	pluginVersion = "0.1.9"
+	pluginVersion = "0.1.10"
 
 	jobStartWindow   = "start-window"
 	jobConfirmWindow = "confirm-window"
