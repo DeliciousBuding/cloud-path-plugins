@@ -158,8 +158,8 @@ func TestSendV1CommandReturnsDeviceError(t *testing.T) {
 func TestExecuteRoutesByDeviceID(t *testing.T) {
 	d := New()
 	p1, p2 := &fakePort{}, &fakePort{}
-	d.devices["one"] = &device{cfg: deviceConfig{ID: "one"}, port: p1, waiters: map[string]chan DeviceAck{}, done: make(chan struct{})}
-	d.devices["two"] = &device{cfg: deviceConfig{ID: "two"}, port: p2, waiters: map[string]chan DeviceAck{}, done: make(chan struct{})}
+	d.devices[instanceDeviceKey("", "one")] = &device{cfg: deviceConfig{ID: "one"}, port: p1, waiters: map[string]chan DeviceAck{}, done: make(chan struct{})}
+	d.devices[instanceDeviceKey("", "two")] = &device{cfg: deviceConfig{ID: "two"}, port: p2, waiters: map[string]chan DeviceAck{}, done: make(chan struct{})}
 	resp, err := d.Execute(context.Background(), &driver.ExecuteRequest{DeviceID: "two", IdempotencyKey: "7", Action: actionLED, ArgsJSON: `{"pattern":9}`})
 	if err != nil || resp.State != driver.CommandStateSucceeded {
 		t.Fatalf("resp=%+v err=%v", resp, err)
@@ -194,7 +194,7 @@ func TestOpenTwoDevicesAndCloseOneIndependently(t *testing.T) {
 	if ports["COM4"].isClosed() {
 		t.Fatal("board-2 was affected by board-1 close")
 	}
-	if d.device("board-2") == nil || d.device("board-3") == nil {
+	if d.device("", "board-2") == nil || d.device("", "board-3") == nil {
 		t.Fatal("unrelated board disappeared")
 	}
 }
@@ -206,7 +206,7 @@ func TestConcurrentExecuteThreeDevicesNoCrossTalk(t *testing.T) {
 		id := fmt.Sprintf("board-%d", i)
 		p := &fakePort{}
 		ports[id] = p
-		d.devices[id] = &device{cfg: deviceConfig{ID: id}, port: p, waiters: map[string]chan DeviceAck{}, done: make(chan struct{})}
+		d.devices[instanceDeviceKey("", id)] = &device{cfg: deviceConfig{ID: id}, port: p, waiters: map[string]chan DeviceAck{}, done: make(chan struct{})}
 	}
 	var wg sync.WaitGroup
 	errs := make(chan error, 3)

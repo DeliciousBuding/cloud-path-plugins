@@ -32,10 +32,11 @@ type deviceConfig struct {
 // device 是一台已打开串口的 STC-B 设备：RX 循环持续解析 Protocol v1 状态/事件/诊断，
 // 以及 legacy 探针固件的 V 帧（bring-up 兼容）。
 type device struct {
-	cfg      deviceConfig
-	portName string
-	port     serial.Port
-	onEvent  func(entityID, eventType string)
+	instanceID string
+	cfg        deviceConfig
+	portName   string
+	port       serial.Port
+	onEvent    func(entityID, eventType string)
 
 	mu         sync.Mutex
 	sensor     *Sensor
@@ -58,7 +59,7 @@ type device struct {
 func openDevice(ctx context.Context, cfg deviceConfig, onEvent func(entityID, eventType string)) (*device, error) {
 	baud := cfg.Baud
 	if baud <= 0 {
-		baud = 9600
+		baud = 115200 // STC-B Full Firmware v1 / SDK 示例的当前串口契约
 	}
 	port, err := serialOpen(cfg.Port, &serial.Mode{BaudRate: baud})
 	if err != nil {

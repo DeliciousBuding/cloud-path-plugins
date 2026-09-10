@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,7 +19,7 @@ import (
 // 稳定身份（一经发布即为机器契约，破坏性语义变化升 @2，不得原地改 @1）。
 const (
 	pluginID      = "io.github.deliciousbuding.cloud-path-driver-stcb"
-	pluginVersion = "0.2.9"
+	pluginVersion = "0.2.10"
 
 	// driverID 是 Describe 上报的稳定 driver 标识，与 plugin.yaml contributes.drivers[0].id 一致。
 	driverID = "stcb"
@@ -174,10 +175,10 @@ func capabilityDescriptors() []driver.CapabilityDescriptor {
 		{ID: capTemp, Title: "温度", Properties: []driver.PropertyDescriptor{{Name: "value", Type: "number", Unit: "Cel", Access: "read", Quality: []string{"good"}}}},
 		{ID: capIllum, Title: "光照", Properties: []driver.PropertyDescriptor{{Name: "value", Type: "number", Access: "read", Quality: []string{"good"}}}},
 		{ID: capAnalog, Title: "模拟输入", Properties: []driver.PropertyDescriptor{{Name: "raw", Type: "integer", Access: "read"}}},
-		{ID: capNav, Title: "导航摇杆", Properties: []driver.PropertyDescriptor{{Name: "raw", Type: "integer", Access: "read"}, {Name: "direction", Type: "integer", Access: "read"}}, Events: []driver.EventDescriptor{{Name: "direction", PayloadSchemaJSON: "{}"}}},
-		{ID: capHall, Title: "磁场检测", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "integer", Access: "read"}}, Events: []driver.EventDescriptor{{Name: "changed", PayloadSchemaJSON: "{}"}}},
+		{ID: capNav, Title: "导航摇杆", Properties: []driver.PropertyDescriptor{{Name: "raw", Type: "integer", Access: "read"}, {Name: "direction", Type: "integer", Access: "read"}}, Events: []driver.EventDescriptor{{Name: "1:press", PayloadSchemaJSON: "{}"}, {Name: "1:release", PayloadSchemaJSON: "{}"}, {Name: "2:press", PayloadSchemaJSON: "{}"}, {Name: "2:release", PayloadSchemaJSON: "{}"}, {Name: "3:press", PayloadSchemaJSON: "{}"}, {Name: "3:release", PayloadSchemaJSON: "{}"}, {Name: "4:press", PayloadSchemaJSON: "{}"}, {Name: "4:release", PayloadSchemaJSON: "{}"}, {Name: "5:press", PayloadSchemaJSON: "{}"}, {Name: "5:release", PayloadSchemaJSON: "{}"}}},
+		{ID: capHall, Title: "磁场检测", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "integer", Access: "read"}}, Events: []driver.EventDescriptor{{Name: "close", PayloadSchemaJSON: "{}"}, {Name: "away", PayloadSchemaJSON: "{}"}}},
 		{ID: capVib, Title: "振动检测", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "integer", Access: "read"}}, Events: []driver.EventDescriptor{{Name: "quake", PayloadSchemaJSON: "{}"}}},
-		{ID: capKey, Title: "按键", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "integer", Access: "read"}}, Events: []driver.EventDescriptor{{Name: "pressed", PayloadSchemaJSON: "{}"}, {Name: "released", PayloadSchemaJSON: "{}"}}},
+		{ID: capKey, Title: "按键", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "integer", Access: "read"}}, Events: []driver.EventDescriptor{{Name: "press", PayloadSchemaJSON: "{}"}, {Name: "release", PayloadSchemaJSON: "{}"}}},
 		{ID: capBuzzer, Title: "蜂鸣器", Properties: []driver.PropertyDescriptor{{Name: "state", Type: "string", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionBuzzer, Title: "播放提示音", Description: "按频率档和时长档播放，完成后返回设备回执。", InputSchemaJSON: mustJSON(buzzerActionSchema)}, {Name: actionTone, Title: "播放原始音调", Description: "按 1-4000 Hz 频率和 10-1200 ms 时长播放，完成后返回设备回执。", InputSchemaJSON: mustJSON(toneActionSchema)}, {Name: actionToneSequence, Title: "播放音序", Description: "一次提交 1-64 个音符；Driver 本地按序执行，内置曲目走固件原生音序器。", InputSchemaJSON: mustJSON(toneSequenceActionSchema)}}},
 		{ID: capLED, Title: "LED 灯组", Properties: []driver.PropertyDescriptor{{Name: "mask", Type: "integer", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionLED, Title: "设置指示灯", Description: "mask 与 pattern 二选一；mask 的每一位对应 L0–L7。", InputSchemaJSON: mustJSON(ledActionSchema)}}},
 		{ID: capDisplay, Title: "数码管", Properties: []driver.PropertyDescriptor{{Name: "mode", Type: "string", Access: "read"}, {Name: "page", Type: "string", Access: "read"}}, Actions: []driver.ActionDescriptor{{Name: actionDisplay, Title: "设置数码管", Description: "digits、codes、mode 三选一；mode 可切换 clock/date/sensors/io/version 信息页。", InputSchemaJSON: mustJSON(displayActionSchema)}}},
@@ -259,11 +260,11 @@ type Driver struct {
 	shutdown    bool
 	negotiated  uint32
 	runtimeID   string
-	instanceID  string
+	cfgs        map[string]instanceConfig
 
-	cfg instanceConfig
-
-	devMu   sync.Mutex
+	devMu sync.Mutex
+	// devices 以 instanceDeviceKey(pluginInstanceID, deviceID) 为键；同一进程
+	// 的多个 Driver 实例不得因相同 device_id 互相复用/关闭串口。
 	devices map[string]*device
 
 	// subscribers fan out per-device events/progress to every matching Watch.
@@ -276,18 +277,26 @@ type Driver struct {
 }
 
 type watchMessage struct {
-	deviceID string
-	union    driver.DriverMessageUnion
+	instanceID string
+	deviceID   string
+	union      driver.DriverMessageUnion
 }
 
 type watchSubscriber struct {
-	deviceIDs map[string]struct{}
-	ch        chan watchMessage
+	instanceID string
+	deviceIDs  map[string]struct{}
+	ch         chan watchMessage
+}
+
+// instanceDeviceKey 隔离同一 Driver 进程内不同插件实例的设备命名空间。
+func instanceDeviceKey(instanceID, deviceID string) string {
+	return instanceID + "\x00" + deviceID
 }
 
 // New 返回一个新的 Driver。
 func New() *Driver {
 	return &Driver{
+		cfgs:    map[string]instanceConfig{},
 		devices: map[string]*device{},
 		subs:    map[uint64]watchSubscriber{},
 	}
@@ -300,29 +309,32 @@ func (d *Driver) nextSeq() uint64 {
 	return d.seq
 }
 
-func (d *Driver) publish(deviceID string, union driver.DriverMessageUnion) {
+func (d *Driver) publish(instanceID, deviceID string, union driver.DriverMessageUnion) {
 	d.subsMu.Lock()
 	defer d.subsMu.Unlock()
 	for _, sub := range d.subs {
+		if sub.instanceID != instanceID {
+			continue
+		}
 		if _, ok := sub.deviceIDs[deviceID]; !ok {
 			continue
 		}
 		select {
-		case sub.ch <- watchMessage{deviceID: deviceID, union: union}:
+		case sub.ch <- watchMessage{instanceID: instanceID, deviceID: deviceID, union: union}:
 		default:
 		}
 	}
 }
 
-func (d *Driver) pushEvent(deviceID, entityID, eventType string) {
-	d.publish(deviceID, &driver.Event{DeviceID: deviceID, EntityID: entityID, EventType: eventType, OccurredAt: time.Now().UTC().Format(time.RFC3339)})
+func (d *Driver) pushEvent(instanceID, deviceID, entityID, eventType string) {
+	d.publish(instanceID, deviceID, &driver.Event{DeviceID: deviceID, EntityID: entityID, EventType: eventType, OccurredAt: time.Now().UTC().Format(time.RFC3339)})
 }
 
-func (d *Driver) pushProgress(deviceID string, p *driver.CommandProgress) {
-	d.publish(deviceID, p)
+func (d *Driver) pushProgress(instanceID, deviceID string, p *driver.CommandProgress) {
+	d.publish(instanceID, deviceID, p)
 }
 
-func (d *Driver) subscribe(deviceIDs []string) (uint64, <-chan watchMessage) {
+func (d *Driver) subscribe(instanceID string, deviceIDs []string) (uint64, <-chan watchMessage) {
 	set := make(map[string]struct{}, len(deviceIDs))
 	for _, id := range deviceIDs {
 		set[id] = struct{}{}
@@ -332,7 +344,7 @@ func (d *Driver) subscribe(deviceIDs []string) (uint64, <-chan watchMessage) {
 	d.subsNext++
 	id := d.subsNext
 	ch := make(chan watchMessage, 64)
-	d.subs[id] = watchSubscriber{deviceIDs: set, ch: ch}
+	d.subs[id] = watchSubscriber{instanceID: instanceID, deviceIDs: set, ch: ch}
 	return id, ch
 }
 
@@ -391,8 +403,10 @@ func (d *Driver) ConfigureInstance(_ context.Context, req *driver.ConfigureInsta
 			}, nil
 		}
 	}
-	d.instanceID = req.PluginInstanceID
-	d.cfg = cfg
+	if d.cfgs == nil {
+		d.cfgs = map[string]instanceConfig{}
+	}
+	d.cfgs[req.PluginInstanceID] = cfg
 	return &driver.ConfigureInstanceResponse{
 		PluginInstanceID: req.PluginInstanceID,
 		AppliedRevision:  req.ConfigRevision,
@@ -419,7 +433,7 @@ func (d *Driver) Discover(_ context.Context, req *driver.DiscoverRequest, stream
 		return err
 	}
 	d.mu.Lock()
-	cfg := d.cfg
+	cfg := d.cfgs[req.PluginInstanceID]
 	d.mu.Unlock()
 	if cfg.DeviceID != "" {
 		devID := cfg.DeviceID
@@ -435,7 +449,7 @@ func (d *Driver) Discover(_ context.Context, req *driver.DiscoverRequest, stream
 // 回落实例级默认配置。ConnectionHints 由 Edge 从 edge.yaml 注入（port/baud/name）。
 func (d *Driver) openConfigFor(req *driver.OpenDeviceRequest) (string, deviceConfig, error) {
 	d.mu.Lock()
-	def := d.cfg
+	def := d.cfgs[req.PluginInstanceID]
 	d.mu.Unlock()
 
 	deviceID := req.DeviceID
@@ -491,12 +505,13 @@ func (d *Driver) OpenDevice(ctx context.Context, req *driver.OpenDeviceRequest) 
 		}, nil
 	}
 
+	key := instanceDeviceKey(req.PluginInstanceID, deviceID)
 	d.devMu.Lock()
 	defer d.devMu.Unlock()
-	if _, ok := d.devices[deviceID]; ok {
+	if _, ok := d.devices[key]; ok {
 		return &driver.OpenDeviceResponse{PluginInstanceID: req.PluginInstanceID, DeviceID: deviceID, Status: status.New()}, nil
 	}
-	dev, err := openDevice(ctx, cfg, func(entityID, eventType string) { d.pushEvent(deviceID, entityID, eventType) })
+	dev, err := openDevice(ctx, cfg, func(entityID, eventType string) { d.pushEvent(req.PluginInstanceID, deviceID, entityID, eventType) })
 	if err != nil {
 		return &driver.OpenDeviceResponse{
 			PluginInstanceID: req.PluginInstanceID,
@@ -504,15 +519,17 @@ func (d *Driver) OpenDevice(ctx context.Context, req *driver.OpenDeviceRequest) 
 			Status:           status.Errorf(status.CodeUnavailable, "打开串口失败: %v", err),
 		}, nil
 	}
-	d.devices[deviceID] = dev
+	dev.instanceID = req.PluginInstanceID
+	d.devices[key] = dev
 	return &driver.OpenDeviceResponse{PluginInstanceID: req.PluginInstanceID, DeviceID: deviceID, Status: status.New()}, nil
 }
 
 // CloseDevice 关闭串口。
 func (d *Driver) CloseDevice(_ context.Context, req *driver.CloseDeviceRequest) (*driver.CloseDeviceResponse, error) {
+	key := instanceDeviceKey(req.PluginInstanceID, req.DeviceID)
 	d.devMu.Lock()
-	dev := d.devices[req.DeviceID]
-	delete(d.devices, req.DeviceID)
+	dev := d.devices[key]
+	delete(d.devices, key)
 	d.devMu.Unlock()
 	if dev != nil {
 		_ = dev.Close()
@@ -522,45 +539,46 @@ func (d *Driver) CloseDevice(_ context.Context, req *driver.CloseDeviceRequest) 
 
 // deviceIDsFor 决定 Watch 应上报的设备集合：优先请求显式列表，再回落实例默认设备，
 // 最后回落当前已打开的全体设备。
-func (d *Driver) deviceIDsFor(ids []string) []string {
+func (d *Driver) deviceIDsFor(instanceID string, ids []string) []string {
 	if len(ids) > 0 {
 		return ids
 	}
 	d.mu.Lock()
-	cfg := d.cfg
+	cfg := d.cfgs[instanceID]
 	d.mu.Unlock()
 	if cfg.DeviceID != "" {
 		return []string{cfg.DeviceID}
 	}
 	d.devMu.Lock()
 	defer d.devMu.Unlock()
-	if len(d.devices) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(d.devices))
-	for id := range d.devices {
-		out = append(out, id)
+	out := make([]string, 0)
+	for _, dev := range d.devices {
+		if dev != nil && dev.instanceID == instanceID {
+			out = append(out, dev.cfg.ID)
+		}
 	}
 	sort.Strings(out)
 	return out
 }
 
-// device 返回指定设备（未打开返回 nil）。
-func (d *Driver) device(deviceID string) *device {
+// device 返回指定实例的设备（未打开返回 nil）。
+func (d *Driver) device(instanceID, deviceID string) *device {
 	d.devMu.Lock()
 	defer d.devMu.Unlock()
-	return d.devices[deviceID]
+	return d.devices[instanceDeviceKey(instanceID, deviceID)]
 }
 
-// sendSnapshot 发送一台设备的 DeviceUpsert + 14 个 EntityUpsert。
+// sendSnapshot 发送一台设备的 DeviceUpsert + 16 个 EntityUpsert。
 func (d *Driver) sendSnapshot(send func(deviceID string, union driver.DriverMessageUnion) error, deviceID string, dev *device) error {
 	statusNow := driver.DeviceStatusUnavailable
 	external := ""
 	name := ""
 	if dev != nil {
-		statusNow = driver.DeviceStatusOnline
 		external = dev.portName
 		name = dev.cfg.Name
+		if dev.online() {
+			statusNow = driver.DeviceStatusOnline
+		}
 	}
 	if err := send(deviceID, &driver.DeviceUpsert{Device: driver.Device{
 		DeviceID: deviceID, ExternalID: external, Manufacturer: "STC-B",
@@ -590,15 +608,15 @@ func (d *Driver) Watch(ctx context.Context, req *driver.WatchRequest, stream dri
 		d.mu.Unlock()
 		return status.Errorf(status.CodeFailedPrecondition, "Initialize required before Watch")
 	}
-	poll := d.cfg.pollInterval()
+	poll := d.cfgs[req.PluginInstanceID].pollInterval()
 	d.mu.Unlock()
 
-	deviceIDs := d.deviceIDsFor(req.DeviceIDs)
+	deviceIDs := d.deviceIDsFor(req.PluginInstanceID, req.DeviceIDs)
 	if len(deviceIDs) == 0 {
 		return status.Errorf(status.CodeInvalidArgument, "device id 未配置")
 	}
 	for _, deviceID := range deviceIDs {
-		if dev := d.device(deviceID); dev != nil && dev.isProtocolV1() && poll > time.Second {
+		if dev := d.device(req.PluginInstanceID, deviceID); dev != nil && dev.isProtocolV1() && poll > time.Second {
 			poll = time.Second
 		}
 	}
@@ -613,29 +631,26 @@ func (d *Driver) Watch(ctx context.Context, req *driver.WatchRequest, stream dri
 		})
 	}
 
+	lastOnline := make(map[string]bool, len(deviceIDs))
 	for _, deviceID := range deviceIDs {
-		if err := d.sendSnapshot(send, deviceID, d.device(deviceID)); err != nil {
+		dev := d.device(req.PluginInstanceID, deviceID)
+		if err := d.sendSnapshot(send, deviceID, dev); err != nil {
 			return err
 		}
+		lastOnline[deviceID] = dev != nil && dev.online()
 	}
-	watchID, messages := d.subscribe(deviceIDs)
+	watchID, messages := d.subscribe(req.PluginInstanceID, deviceIDs)
 	defer d.unsubscribe(watchID)
 
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
 	syncTicker := time.NewTicker(syncInterval)
 	defer syncTicker.Stop()
-	var deviceDone <-chan struct{}
-	if len(deviceIDs) == 1 {
-		if dev := d.device(deviceIDs[0]); dev != nil {
-			deviceDone = dev.Done()
-		}
-	}
 
-	d.syncAll(deviceIDs)
+	d.syncAll(req.PluginInstanceID, deviceIDs)
 
 	reqFrame := func(deviceID string) {
-		dev := d.device(deviceID)
+		dev := d.device(req.PluginInstanceID, deviceID)
 		if dev == nil || dev.isProtocolV1() {
 			return
 		}
@@ -647,8 +662,6 @@ func (d *Driver) Watch(ctx context.Context, req *driver.WatchRequest, stream dri
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-deviceDone:
-			return nil
 		case <-ticker.C:
 			for _, deviceID := range deviceIDs {
 				reqFrame(deviceID)
@@ -659,13 +672,21 @@ func (d *Driver) Watch(ctx context.Context, req *driver.WatchRequest, stream dri
 			case <-time.After(200 * time.Millisecond):
 			}
 			for _, deviceID := range deviceIDs {
-				if dev := d.device(deviceID); dev != nil {
+				dev := d.device(req.PluginInstanceID, deviceID)
+				online := dev != nil && dev.online()
+				if lastOnline[deviceID] != online {
+					if err := d.sendSnapshot(send, deviceID, dev); err != nil {
+						return err
+					}
+					lastOnline[deviceID] = online
+				}
+				if online {
 					d.emitObservations(send, deviceID, dev)
 					d.emitDiagnostic(send, deviceID, dev)
 				}
 			}
 		case <-syncTicker.C:
-			d.syncAll(deviceIDs)
+			d.syncAll(req.PluginInstanceID, deviceIDs)
 		case msg := <-messages:
 			_ = send(msg.deviceID, msg.union)
 		}
@@ -673,9 +694,9 @@ func (d *Driver) Watch(ctx context.Context, req *driver.WatchRequest, stream dri
 }
 
 // syncAll 对当前 Watch 的每台设备下发 T+HHMM 对时帧（尽力而为，慢发防丢字节）。
-func (d *Driver) syncAll(deviceIDs []string) {
+func (d *Driver) syncAll(instanceID string, deviceIDs []string) {
 	for _, deviceID := range deviceIDs {
-		dev := d.device(deviceID)
+		dev := d.device(instanceID, deviceID)
 		if dev == nil {
 			continue
 		}
@@ -687,7 +708,7 @@ func (d *Driver) syncAll(deviceIDs []string) {
 
 // emitObservations 把当前转储/V 帧快照转成 Observation 消息。
 func (d *Driver) emitObservations(send func(deviceID string, union driver.DriverMessageUnion) error, deviceID string, dev *device) {
-	if dev == nil {
+	if dev == nil || !dev.online() {
 		return
 	}
 	sensor, lastSensor, _ := dev.snapshot()
@@ -709,7 +730,9 @@ func (d *Driver) emitObservations(send func(deviceID string, union driver.Driver
 			at = time.Now()
 		}
 		obs("clock", capClock, "time", str(full.Clock), at)
-		obs("temperature", capTemp, "value", num(TempC(full.Temp)), at)
+		if temp := TempC(full.Temp); !math.IsNaN(temp) {
+			obs("temperature", capTemp, "value", num(temp), at)
+		}
 		obs("illuminance", capIllum, "value", integer(full.Light), at)
 		obs("navigation", capNav, "raw", integer(full.Nav), at)
 		obs("navigation", capNav, "direction", integer(full.NavKey), at)
@@ -735,7 +758,9 @@ func (d *Driver) emitObservations(send func(deviceID string, union driver.Driver
 			at = time.Now()
 		}
 		obs("clock", capClock, "time", str(fmt.Sprintf("%02d:%02d:%02d", sensor.Hour, sensor.Min, sensor.Sec)), at)
-		obs("temperature", capTemp, "value", num(TempC(sensor.Rt)), at)
+		if temp := TempC(sensor.Rt); !math.IsNaN(temp) {
+			obs("temperature", capTemp, "value", num(temp), at)
+		}
 		obs("illuminance", capIllum, "value", integer(sensor.Rop), at)
 		obs("hall", capHall, "state", integer(sensor.Hall), at)
 		obs("vibration", capVib, "state", integer(sensor.Vib), at)
@@ -788,12 +813,21 @@ func (d *Driver) Execute(ctx context.Context, req *driver.ExecuteRequest) (*driv
 
 	d.devMu.Lock()
 	deviceID := req.DeviceID
-	if deviceID == "" && len(d.devices) == 1 {
-		for id := range d.devices {
-			deviceID = id
+	if deviceID == "" {
+		found := ""
+		for _, candidate := range d.devices {
+			if candidate == nil || candidate.instanceID != req.PluginInstanceID {
+				continue
+			}
+			if found != "" {
+				found = ""
+				break
+			}
+			found = candidate.cfg.ID
 		}
+		deviceID = found
 	}
-	dev := d.devices[deviceID]
+	dev := d.devices[instanceDeviceKey(req.PluginInstanceID, deviceID)]
 	d.devMu.Unlock()
 	if dev == nil {
 		return &driver.ExecuteResponse{
@@ -807,7 +841,7 @@ func (d *Driver) Execute(ctx context.Context, req *driver.ExecuteRequest) (*driv
 	detail, err := dev.sendCommand(ctx, req.IdempotencyKey, req.Action, req.ArgsJSON)
 	cmdID := "cmd-" + req.IdempotencyKey
 	if err != nil {
-		d.pushProgress(deviceID, &driver.CommandProgress{
+		d.pushProgress(req.PluginInstanceID, deviceID, &driver.CommandProgress{
 			CommandID: cmdID, IdempotencyKey: req.IdempotencyKey, EntityID: req.EntityID,
 			Action: req.Action, State: driver.CommandStateFailed, Detail: err.Error(),
 		})
@@ -819,7 +853,7 @@ func (d *Driver) Execute(ctx context.Context, req *driver.ExecuteRequest) (*driv
 		}, nil
 	}
 
-	d.pushProgress(deviceID, &driver.CommandProgress{
+	d.pushProgress(req.PluginInstanceID, deviceID, &driver.CommandProgress{
 		CommandID: cmdID, IdempotencyKey: req.IdempotencyKey, EntityID: req.EntityID,
 		Action: req.Action, State: driver.CommandStateSucceeded, Progress: 1, Detail: detail,
 	})

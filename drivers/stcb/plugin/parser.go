@@ -126,7 +126,7 @@ func ParseSensor(line string) (Sensor, bool) {
 // 依原理图：VCC→10K(R56)→V_Rt→Rt(10K/3950)→GND（10-bit ADC）：
 // Rt = 10000*Adc/(1024-Adc)；Beta=3950，T0=25°C，R0=10K。
 func TempC(rt int) float64 {
-	if rt < 0 || rt > 1023 {
+	if rt <= 0 || rt >= 1024 {
 		return math.NaN()
 	}
 	r := 10000.0 * float64(rt) / (1024.0 - float64(rt))

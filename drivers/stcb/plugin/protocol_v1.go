@@ -31,16 +31,17 @@ func parseHex3(s string) (int, error) {
 	if len(s) != 3 {
 		return 0, fmt.Errorf("want 3 hex digits")
 	}
-	v, err := strconv.ParseUint(s, 16, 12)
+	// STC-B ADC/温度字段是 10-bit（0x000–0x3FF）；0xFFF 等越界值不能伪装成有效观测。
+	v, err := strconv.ParseUint(s, 16, 10)
 	return int(v), err
 }
 
-func parseHexByte(s string) int {
-	v, err := strconv.ParseUint(s, 16, 8)
-	if err != nil {
-		return 0
+func parseHexByte(s string) (int, error) {
+	if len(s) != 2 {
+		return 0, fmt.Errorf("want 2 hex digits")
 	}
-	return int(v)
+	v, err := strconv.ParseUint(s, 16, 8)
+	return int(v), err
 }
 
 func parseRange(s string, max int) (int, error) {
@@ -93,10 +94,11 @@ func ParseFullState(line string) (FullState, bool) {
 	k2, e12 := parse01(kv["k2"])
 	k3, e13 := parse01(kv["k3"])
 	navKey, e14 := parseRange(kv["navkey"], 6)
-	if e4 != nil || e5 != nil || e6 != nil || e7 != nil || e8 != nil || e9 != nil || e10 != nil || e11 != nil || e12 != nil || e13 != nil || e14 != nil {
+	led, e15 := parseHexByte(kv["led"])
+	if e4 != nil || e5 != nil || e6 != nil || e7 != nil || e8 != nil || e9 != nil || e10 != nil || e11 != nil || e12 != nil || e13 != nil || e14 != nil || e15 != nil {
 		return FullState{}, false
 	}
-	return FullState{Clock: clock, Hour: hour, Min: min, Sec: sec, Temp: temp, Light: light, Nav: nav, Ext0: ext0, Ext1: ext1, Hall: hall, Vib: vib, Key1: k1, Key2: k2, Key3: k3, NavKey: navKey, Motor: kv["motor"], Beep: kv["beep"], Display: kv["display"], Page: kv["page"], LED: parseHexByte(kv["led"]), Raw: line}, true
+	return FullState{Clock: clock, Hour: hour, Min: min, Sec: sec, Temp: temp, Light: light, Nav: nav, Ext0: ext0, Ext1: ext1, Hall: hall, Vib: vib, Key1: k1, Key2: k2, Key3: k3, NavKey: navKey, Motor: kv["motor"], Beep: kv["beep"], Display: kv["display"], Page: kv["page"], LED: led, Raw: line}, true
 }
 
 // ParseDeviceAck parses ACK:<id>:ok and ERR:<id>:<code>.
@@ -106,10 +108,14 @@ func ParseDeviceAck(line string) (DeviceAck, bool) {
 		return DeviceAck{}, false
 	}
 	p := strings.SplitN(line, ":", 3)
-	if len(p) != 3 || p[1] == "" {
+	if len(p) != 3 || p[1] == "" || strings.TrimSpace(p[2]) == "" {
 		return DeviceAck{}, false
 	}
-	return DeviceAck{ID: p[1], OK: ok, Detail: p[2]}, true
+	detail := strings.TrimSpace(p[2])
+	if ok && detail != "ok" {
+		return DeviceAck{ID: p[1], OK: false, Detail: detail}, true
+	}
+	return DeviceAck{ID: p[1], OK: ok, Detail: detail}, true
 }
 
 func ParseProtocolEvent(line string) (string, bool) {

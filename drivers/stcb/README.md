@@ -5,7 +5,7 @@ STC-B（IAP15F2K61S2）的独立 CloudPath Driver Plugin。它把板载硬件翻
 ## Runtime chain
 
 ~~~text
-CloudPath Edge → Plugin Host → cloud-path-driver-stcb → UART 115200 8N1 → STC-B Full Firmware v1.3.0
+CloudPath Edge → Plugin Host → cloud-path-driver-stcb → UART 115200 8N1 → STC-B Full Firmware v1.3.1
 ~~~
 
 固件与协议位于 [stcb-firmware-sdk](https://github.com/DeliciousBuding/stcb-firmware-sdk)；正式线协议为 STC-B Device Protocol v1。
@@ -104,7 +104,7 @@ Alarm、compartment、服药时段不属于板载 Driver；这些业务只由 Ap
 
 - plugin id: io.github.deliciousbuding.cloud-path-driver-stcb
 - driver id: stcb
-- version: 0.2.9
+- version: 0.2.10
 - protocol: CloudPath Driver Protocol 1
 - compatibility: CloudPath Core >=0.2.0 <0.3.0
 - permission: hardware [serial]

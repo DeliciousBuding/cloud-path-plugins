@@ -31,6 +31,23 @@ func TestParseDeviceAck(t *testing.T) {
 	if !ok || errAck.OK || errAck.Detail != "busy" {
 		t.Fatalf("err=%+v ok=%v", errAck, ok)
 	}
+	if _, ok := ParseDeviceAck("ACK:39-display:not-ok"); !ok {
+		t.Fatal("non-ok ACK detail should parse as a failed correlated ACK")
+	}
+	if _, ok := ParseDeviceAck("ACK:39-display:"); ok {
+		t.Fatal("empty ACK detail accepted")
+	}
+}
+
+func TestParseFullStateRejectsInvalidHexRanges(t *testing.T) {
+	for _, line := range []string{
+		"STATE:clock=16:42:03,temp=1D6,light=400,nav=3FF,ext0=000,ext1=001,hall=1,vib=0,k1=1,k2=0,k3=0,navkey=0,motor=free,beep=busy,led=FF,display=clock,page=date",
+		"STATE:clock=16:42:03,temp=1D6,light=038,nav=3FF,ext0=000,ext1=001,hall=1,vib=0,k1=1,k2=0,k3=0,navkey=0,motor=free,beep=busy,led=GG,display=clock,page=date",
+	} {
+		if _, ok := ParseFullState(line); ok {
+			t.Fatalf("accepted invalid STATE: %s", line)
+		}
+	}
 }
 
 func TestEncodeV1Command(t *testing.T) {

@@ -67,15 +67,18 @@ func parseToneSequenceArgs(raw string) (toneSequenceArgs, error) {
 	if len(args.Notes) == 0 || len(args.Notes) > maxToneSequenceNotes {
 		return toneSequenceArgs{}, fmt.Errorf("stcb: tone-sequence requires 1-%d notes", maxToneSequenceNotes)
 	}
+	if args.GapMS < 0 || args.GapMS > maxSequenceGapMS || args.GapMS%10 != 0 {
+		return toneSequenceArgs{}, fmt.Errorf("stcb: tone-sequence gap_ms must be 0-%d and a multiple of 10", maxSequenceGapMS)
+	}
 	total := 0
 	for index, note := range args.Notes {
 		if err := validateToneNote(note); err != nil {
 			return toneSequenceArgs{}, fmt.Errorf("stcb: tone-sequence note %d: %w", index+1, err)
 		}
 		total += note.DurationMS
-	}
-	if args.GapMS < 0 || args.GapMS > maxSequenceGapMS || args.GapMS%10 != 0 {
-		return toneSequenceArgs{}, fmt.Errorf("stcb: tone-sequence gap_ms must be 0-%d and a multiple of 10", maxSequenceGapMS)
+		if index < len(args.Notes)-1 {
+			total += args.GapMS
+		}
 	}
 	if total > maxToneSequenceMS {
 		return toneSequenceArgs{}, fmt.Errorf("stcb: tone-sequence total duration exceeds %d ms", maxToneSequenceMS)

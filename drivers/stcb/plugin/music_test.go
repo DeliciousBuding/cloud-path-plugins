@@ -32,6 +32,17 @@ func TestToneSequenceContractAndNativeMapping(t *testing.T) {
 	if _, err := parseToneSequenceArgs(`{"notes":[{"frequency_hz":262,"duration_ms":1200}],"gap_ms":1001}`); err == nil {
 		t.Fatal("tone-sequence accepted oversized gap")
 	}
+	notes := make([]toneNote, 60)
+	for i := range notes {
+		notes[i] = toneNote{FrequencyHz: 1000, DurationMS: 1000}
+	}
+	raw, err := json.Marshal(toneSequenceArgs{Notes: notes, GapMS: 1000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parseToneSequenceArgs(string(raw)); err == nil {
+		t.Fatal("tone-sequence ignored gap_ms in total duration")
+	}
 
 	littleStar := toneSequenceArgs{Notes: []toneNote{
 		{FrequencyHz: 262, DurationMS: 300}, {FrequencyHz: 262, DurationMS: 300},
