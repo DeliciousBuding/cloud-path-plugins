@@ -116,6 +116,8 @@ jobs:
           set -euo pipefail
           cd release-assets
           cp ../plugin.yaml plugin.yaml
+          cp ../LICENSE LICENSE
+          cp ../NOTICE NOTICE
           sha256sum * > checksums.txt
           ls -l
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Command cloud-path-app-scheduled-compartment is the executable entrypoint for
 // the Scheduled Compartment reference application.
 //
