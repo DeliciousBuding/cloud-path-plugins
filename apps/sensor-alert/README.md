@@ -8,7 +8,7 @@
 
 版本：`0.2.3`
 Application Protocol：`1`
-要求：Core `>=0.2.29 <0.3.0`，公开 Go SDK `0.2.15+`
+要求：Core `>=0.2.29 <0.3.0`，公开 Go SDK `0.2.42+`
 发布记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## Web UI 贡献

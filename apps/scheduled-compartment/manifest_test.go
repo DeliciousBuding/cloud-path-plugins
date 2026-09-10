@@ -244,8 +244,8 @@ func TestManifestRequirementsMirror(t *testing.T) {
 	if len(expected) != 0 {
 		t.Fatalf("missing jobs: %v", expected)
 	}
-	if !strings.Contains(repoFile(t, "go.mod"), "github.com/DeliciousBuding/cloud-path v0.2.15") {
-		t.Fatal("SDK dependency must match the minimum Core version")
+	if !strings.Contains(repoFile(t, "go.mod"), "github.com/DeliciousBuding/cloud-path v0.2.42") {
+		t.Fatal("SDK dependency must pin the reviewed Core release")
 	}
 }
 

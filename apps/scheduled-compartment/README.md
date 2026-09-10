@@ -6,7 +6,7 @@
 
 把一个或多个按键变成**取药确认**输入：按每日计划或管理台操作开启提醒窗口，记录按时确认、到期未确认、迟到确认，以及提醒命令的实际回执。
 
-**版本 0.3.3；需要 Core >=0.2.29 且 <0.3.0，公开 Go SDK v0.2.15+。** 两个用户操作依赖 `JobDescriptor.ManualOnly`，不能放到不识别该字段的旧 Core 上运行，否则旧的分钟调度器可能把用户操作当自动任务。
+**版本 0.3.3；需要 Core >=0.2.29 且 <0.3.0，公开 Go SDK v0.2.42+。** 两个用户操作依赖 `JobDescriptor.ManualOnly`，不能放到不识别该字段的旧 Core 上运行，否则旧的分钟调度器可能把用户操作当自动任务。
 
 状态：`IMPLEMENTED`。仓库测试覆盖内存协议、业务状态机和失败边界；不代表管理台 HTTP、真实设备或现场验收已经通过。应用不直接打开设备、串口或网络连接，只通过公开 SDK 请求已绑定的 Capability。
 
@@ -291,7 +291,7 @@ gofmt -l .
 go build -o bin/cloud-path-app-scheduled-compartment ./cmd/cloud-path-app-scheduled-compartment
 ```
 
-依赖正式发布的 Core public SDK v0.2.15；`go.mod` 不包含本地 `replace`。首次构建用 `go mod download` 获取经过校验的依赖。测试只使用内存传输和可控时钟，不调用设备、串口、生产网络或实际蜂鸣；Linux CI 额外运行 race detector。
+依赖正式发布的 Core public SDK v0.2.42；`go.mod` 不包含本地 `replace`。首次构建用 `go mod download` 获取经过校验的依赖。测试只使用内存传输和可控时钟，不调用设备、串口、生产网络或实际蜂鸣；Linux CI 额外运行 race detector。
 
 主程序由 Core Plugin Host 注入启动身份并托管，不是独立运行的硬件程序。本仓不依赖 Core `internal/`，不定义 Driver/端口特例。
 

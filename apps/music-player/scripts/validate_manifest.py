@@ -164,8 +164,8 @@ def validate_tree(root, value):
     module = (root / "go.mod").read_text(encoding="utf-8")
     if not re.search(r'^module github.com/DeliciousBuding/cloud-path-plugins/apps/music-player$', module, re.M):
         errors.append("wrong Go module identity")
-    if not re.search(r'^require github.com/DeliciousBuding/cloud-path v0\.2\.15$', module, re.M):
-        errors.append("go.mod must pin the public Core v0.2.15 SDK")
+    if not re.search(r'^require github.com/DeliciousBuding/cloud-path v0\.2\.42$', module, re.M):
+        errors.append("go.mod must pin the public Core v0.2.42 SDK")
     if re.search(r'^\s*(replace|exclude)\b', module, re.M):
         errors.append("go.mod must not contain development overrides")
     for source in root.rglob("*.go"):

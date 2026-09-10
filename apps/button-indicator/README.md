@@ -8,7 +8,7 @@ A capability-only CloudPath **Application plugin** with a default walking light
 and an opt-in **service-call / acknowledge** workflow for duty desks and
 workstation requests. It is not a medical emergency or life-safety system.
 
-Version **0.2.3** requires **Core v0.2.29+** (Core <0.3.0) and public SDK v0.2.15+.
+Version **0.2.3** requires **Core v0.2.29+** (Core <0.3.0) and public SDK v0.2.42+.
 Status: **IMPLEMENTED** — package and Application Protocol tests are not
 real-device acceptance evidence.
 
@@ -248,7 +248,7 @@ same-mode timezone/heartbeat updates are allowed.
 
 ## Development and acceptance
 
-The repository pins the published public SDK v0.2.15. Verify its checksums
+The repository pins the published public SDK v0.2.42. Verify its checksums
 and run the full local gate:
 
 ```bash
@@ -265,7 +265,7 @@ python scripts/validate_manifest.py plugin.yaml --dir .
 When co-developing against an unpublished SDK, use an ignored temporary modfile
 with a local `replace` to a Core checkout that provides `JobDescriptor.ManualOnly`.
 Run build/test/vet with `-modfile=.local/sdk-test.mod`; do not commit that replace
-or manufacture release checksums. The tracked dependency remains v0.2.15.
+or manufacture release checksums. The tracked dependency remains v0.2.42.
 
 Acceptance steps (hardware execution belongs to the integrator):
 

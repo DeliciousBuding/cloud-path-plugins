@@ -3,11 +3,11 @@
 This distribution includes the following third-party software. The copyright
 notices and license terms below are reproduced for binary redistribution.
 
-## github.com/DeliciousBuding/cloud-path v0.2.15
+## github.com/DeliciousBuding/cloud-path v0.2.42
 
 Source: https://github.com/DeliciousBuding/cloud-path
 
-All active plugins in this repository compile against this MIT-licensed SDK release.
+All active plugins in this repository compile against this MIT-licensed SDK release. Archived plugin source retains the historical Core SDK v0.2.15 requirement and is covered by the same MIT license text below.
 
 ```text
 MIT License

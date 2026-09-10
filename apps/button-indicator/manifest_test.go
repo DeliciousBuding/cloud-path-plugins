@@ -192,7 +192,7 @@ func TestRequirementDeclarationsStayInSync(t *testing.T) {
 	if !strings.Contains(repoFile(t, "plugin.yaml"), `core: ">=0.2.29 <0.3.0"`) {
 		t.Fatal("manual jobs must not install on a Core that auto-runs every job")
 	}
-	if !strings.Contains(repoFile(t, "go.mod"), "github.com/DeliciousBuding/cloud-path v0.2.15") {
+	if !strings.Contains(repoFile(t, "go.mod"), "github.com/DeliciousBuding/cloud-path v0.2.42") {
 		t.Fatal("public SDK dependency must provide ManualOnly")
 	}
 }

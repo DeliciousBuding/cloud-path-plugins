@@ -8,7 +8,7 @@
 把内置歌曲每轮重复压成一条 `tone-sequence` 命令，把单音压成一条 `tone` 命令，并维护当前 `music_session` 状态。
 它不直接访问串口、浏览器、烧录工具或现网配置，只使用 Core 绑定后提供的实体 ID。
 
-Version **0.3.3**；需要 Core `>=0.2.29 <0.3.0` 和公开 Go SDK v0.2.15+。
+Version **0.3.3**；需要 Core `>=0.2.29 <0.3.0` 和公开 Go SDK v0.2.42+。
 仓库测试只使用 fake event stream / fake effect writer；真板或现场验收证据不在本仓库内声明。
 发布记录见 [CHANGELOG.md](CHANGELOG.md)。
 

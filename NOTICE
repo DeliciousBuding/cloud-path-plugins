@@ -5,8 +5,9 @@ This repository is the source-of-truth monorepo for first-party CloudPath
 Driver and Application plugins. First-party source is licensed under the
 Apache License 2.0.
 
-The CloudPath Core SDK v0.2.15 referenced by the active plugins is a third-party
-dependency of this distribution and was published under the MIT License.
+The CloudPath Core SDK v0.2.42 referenced by the active plugins is a third-party
+dependency of this distribution and was published under the MIT License. Archived
+plugin source retains its historical Core SDK v0.2.15 module requirement.
 The serial and operating-system dependencies retain their respective
 BSD-3-Clause licenses. Complete notices and license texts are reproduced in
 THIRD_PARTY_NOTICES.md.
