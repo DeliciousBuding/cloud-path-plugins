@@ -40,7 +40,7 @@ func jobDescriptors() []application.JobDescriptor {
 	return []application.JobDescriptor{
 		{ID: jobStartWindow, Title: "启动药盒提醒窗口", ManualOnly: true, InputSchemaJSON: `{"type":"object","additionalProperties":false,"required":["window_id","minutes"],"properties":{"window_id":{"type":"string","minLength":1,"maxLength":128,"title":"窗口 ID","description":"本次提醒窗口的唯一标识，例如 trial-001；重试复用同一个。"},"minutes":{"type":"integer","minimum":1,"maximum":120,"title":"提醒时长（分钟）","description":"填写 1-120 的整数。"}}}`},
 		{ID: jobConfirmWindow, Title: "管理台确认窗口", ManualOnly: true, InputSchemaJSON: `{"type":"object","additionalProperties":false,"required":["window_id","source"],"properties":{"window_id":{"type":"string","minLength":1,"maxLength":128,"title":"窗口 ID","description":"要确认的窗口 ID。"},"source":{"type":"string","enum":["dashboard"],"title":"确认来源","description":"管理台确认必须填写 dashboard。"}}}`},
-		{ID: jobCheckWindow, Title: "检查到期未确认窗口", InputSchemaJSON: `{"type":"object","additionalProperties":false,"properties":{"window_id":{"type":"string","minLength":1,"maxLength":128,"title":"窗口 ID（可选）","description":"可留空；留空时扫描全部到期窗口。"}}}`},
+		{ID: jobCheckWindow, Title: "检查并启动定时提醒窗口", InputSchemaJSON: `{"type":"object","additionalProperties":false,"properties":{"window_id":{"type":"string","minLength":1,"maxLength":128,"title":"窗口 ID（可选）","description":"可留空；留空时先按日程补齐当前应开启窗口，再扫描全部到期窗口。"}}}`},
 		{ID: jobStatus, Title: "查询药盒窗口状态", ManualOnly: true, InputSchemaJSON: `{"type":"object","additionalProperties":false,"properties":{"window_id":{"type":"string","minLength":1,"maxLength":128,"title":"窗口 ID（可选）","description":"可留空；留空时返回最近窗口。"}}}`},
 	}
 }
@@ -177,6 +177,14 @@ func (s *Service) RunJob(_ context.Context, req *application.RunJobRequest) (*ap
 			}
 		}
 	case jobCheckWindow:
+		if check.WindowID == "" {
+			due, dueErr := s.openDueWindows(req.PluginInstanceID, st, now)
+			if dueErr != nil {
+				err = dueErr
+				break
+			}
+			effects = append(effects, due...)
+		}
 		missed := make([]string, 0)
 		for id, w := range st.windows {
 			if check.WindowID != "" && id != check.WindowID {
@@ -223,4 +231,48 @@ func (s *Service) RunJob(_ context.Context, req *application.RunJobRequest) (*ap
 		s.mu.Unlock()
 	}
 	return &application.RunJobResponse{JobID: req.JobID, Status: status.New(), ResultJSON: body}, nil
+}
+
+// openDueWindows restores the minute-loop schedule owner used by the public
+// Host: Core calls check-window every minute, and the app opens each due daily
+// window once. ScheduleTick remains wire-compatible for older hosts.
+func (s *Service) openDueWindows(instanceID string, st *instanceState, now time.Time) ([]application.ApplicationEffectUnion, error) {
+	if st == nil || st.config == nil {
+		return nil, nil
+	}
+	loc, err := time.LoadLocation(st.config.Timezone)
+	if err != nil {
+		return nil, nil
+	}
+	local := now.In(loc)
+	var effects []application.ApplicationEffectUnion
+	for _, spec := range st.config.Schedule {
+		startClock, startOK := parseClock(spec.Start)
+		endClock, endOK := parseClock(spec.End)
+		if !startOK || !endOK {
+			continue
+		}
+		start := time.Date(local.Year(), local.Month(), local.Day(), startClock.Hour(), startClock.Minute(), 0, 0, loc)
+		end := time.Date(local.Year(), local.Month(), local.Day(), endClock.Hour(), endClock.Minute(), 0, 0, loc)
+		if !end.After(start) || now.Before(start) || !now.Before(end) {
+			continue
+		}
+		id := scheduleOccurrenceID(spec.ID, start)
+		if st.windows[id] != nil {
+			continue
+		}
+		if err := s.readyForEffects(instanceID, st); err != nil {
+			return nil, err
+		}
+		w := &windowTrack{
+			ID:          id,
+			Source:      sourceSchedule,
+			ScheduleID:  spec.ID,
+			Compartment: st.config.resolvedCompartment(),
+			Start:       start,
+			End:         end,
+		}
+		effects = append(effects, s.startWindow(st, w, now)...)
+	}
+	return effects, nil
 }

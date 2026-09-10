@@ -610,7 +610,7 @@ func TestHallCloseDoesNotLateConfirmMissedWindow(t *testing.T) {
 	f.mustJob(t, jobStartWindow, `{"window_id":"close-missed-1","minutes":1}`, "close-missed-start")
 	f.sink.take()
 	f.advance(2 * time.Minute)
-	f.mustJob(t, jobCheckWindow, `{}`, "close-missed-check")
+	f.mustJob(t, jobCheckWindow, `{"window_id":"close-missed-1"}`, "close-missed-check")
 	f.sink.take()
 
 	f.event(t, &application.CapabilityEvent{
@@ -691,7 +691,7 @@ func TestMissedAndLateConfirmation(t *testing.T) {
 	f.mustJob(t, jobStartWindow, `{"window_id":"late-1","minutes":1}`, "late-start")
 	f.sink.take()
 	f.advance(2 * time.Minute)
-	f.mustJob(t, jobCheckWindow, `{}`, "check-1")
+	f.mustJob(t, jobCheckWindow, `{"window_id":"late-1"}`, "check-1")
 	missedEffects := f.sink.take()
 	missedRecord := recordData(t, recordsOf(missedEffects)[0])
 	if missedRecord["state"] != windowMissed || missedRecord["missed_at"] == "" {
@@ -794,9 +794,9 @@ func TestCheckWindowAndJobIdempotency(t *testing.T) {
 	f.sink.take()
 	f.advance(2 * time.Minute)
 
-	first := f.mustJob(t, jobCheckWindow, `{}`, "check-idem")
+	first := f.mustJob(t, jobCheckWindow, `{"window_id":"idem-1"}`, "check-idem")
 	f.sink.take()
-	second := f.mustJob(t, jobCheckWindow, `{}`, "check-idem")
+	second := f.mustJob(t, jobCheckWindow, `{"window_id":"idem-1"}`, "check-idem")
 	if fmt.Sprint(first["missed"]) != fmt.Sprint(second["missed"]) {
 		t.Fatalf("idempotent check result changed: %v vs %v", first, second)
 	}
@@ -811,6 +811,29 @@ func TestCheckWindowAndJobIdempotency(t *testing.T) {
 		_, err := f.job(jobStartWindow, `{"window_id":"other","minutes":1}`, "idem-start")
 		return err
 	}(), status.CodeInvalidArgument)
+}
+
+func TestCheckWindowOpensDueScheduleWithoutScheduleTick(t *testing.T) {
+	f := newFixture(t, false)
+	id := scheduleOccurrenceID("morning", f.now())
+
+	result := f.mustJob(t, jobCheckWindow, `{}`, "auto-check-1")
+	effects := f.sink.take()
+	w := f.window(t, id)
+	if w.State != windowOpened || w.Source != sourceSchedule || w.ScheduleID != "morning" || !w.OpenedAt.Equal(f.now()) {
+		t.Fatalf("due window = %+v", w)
+	}
+	if fmt.Sprint(result["missed"]) != "[]" {
+		t.Fatalf("new due window reported as missed: %+v", result)
+	}
+	if commandWithKey(effects, reminderStartPrefix+id) == nil {
+		t.Fatalf("scheduled buzzer command missing: %+v", commandsOf(effects))
+	}
+
+	f.mustJob(t, jobCheckWindow, `{}`, "auto-check-2")
+	if f.sink.count() != 0 {
+		t.Fatal("second automatic check emitted duplicate effects")
+	}
 }
 
 func TestScheduleTickUsesConfiguredSingleCompartment(t *testing.T) {

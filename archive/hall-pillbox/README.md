@@ -2,7 +2,7 @@
 
 把霍尔开盖传感器和可选 K1 按键变成药盒确认输入：按每日计划或管理台操作启动提醒窗口，记录按时确认、超时未确认和迟到确认，并跟踪蜂鸣器/显示命令的真实回执。
 
-**版本 0.1.8；需要 Core >=0.2.29 且 <0.3.0。** 静音 `0/0` 的 `start-window → display reminder ACK → dashboard confirm → display idle ACK` 已完成生产真板 E2E，状态为 `VERIFIED`；物理磁铁 `opening/close-ignore/away` 序列仍需人工操作，状态为 `PLANNED`。仓库测试另覆盖内存协议、状态机、绑定和 effect 失败边界。
+**版本 0.1.9；需要 Core >=0.2.29 且 <0.3.0。** 静音 `0/0` 的 `start-window → display reminder ACK → dashboard confirm → display idle ACK` 已完成生产真板 E2E，状态为 `VERIFIED`；物理磁铁 `opening/close-ignore/away` 序列仍需人工操作，状态为 `PLANNED`。仓库测试另覆盖内存协议、状态机、绑定和 effect 失败边界。
 
 本应用是软件-only Application 插件：不访问 COM3、不启动/停止 Edge、不烧录、不修改现网配置。它只通过公开 SDK 请求已绑定的 Capability。
 
@@ -85,7 +85,7 @@ Core 的每日窗口调度会读取配置中的 `schedule` 并发送 `ScheduleTi
 |---|---|---:|---|
 | `start-window` | `{"window_id":"trial-001","minutes":10}` | 否 | 手动启动单 compartment 窗口；`minutes` 为 1–120；重复同一 ID/时长返回原结果，不重复发命令 |
 | `confirm-window` | `{"window_id":"trial-001","source":"dashboard"}` | 否 | 管理台确认；`source` 必须为 `dashboard`，确认来源记录为 `dashboard` |
-| `check-window` | `{}` 或 `{"window_id":"trial-001"}` | 是 | Core 每分钟调用；也可手动调用；扫描到期窗口并转为 `missed` |
+| `check-window` | `{}` 或 `{"window_id":"trial-001"}` | 是 | Core 每分钟调用；留空时先按日程补齐当前应开启窗口，再扫描到期窗口并转为 `missed` |
 | `status` | `{}` 或 `{"window_id":"trial-001"}` | 否 | 只读返回实例配置、活跃数和窗口记录，不发送设备命令 |
 
 `start-window`、`confirm-window`、`status` 标记为 `ManualOnly`，避免旧 Core 的分钟调度器把管理台动作当自动任务。`check-window` 是唯一自动 job。

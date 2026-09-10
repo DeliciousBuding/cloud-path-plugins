@@ -1,7 +1,7 @@
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Application
 id: io.github.deliciousbuding.cloud-path-app-hall-pillbox
-version: 0.1.8
+version: 0.1.9
 protocol: 1
 entrypoint: cloud-path-app-hall-pillbox
 compatibility:
