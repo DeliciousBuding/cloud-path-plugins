@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Command cloud-path-app-button-indicator is the executable entrypoint for
 // the Button Indicator reference application.
 //

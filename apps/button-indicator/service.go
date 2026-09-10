@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package buttonindicator is the Button Indicator reference application: the
 // default walking light and opt-in service-call workflow use only generic
 // key, LED and optional buzzer capabilities. A declarative heartbeat is driven
@@ -21,7 +23,7 @@ import (
 // Manifest identity. These must mirror plugin.yaml.
 const (
 	pluginIDValue = "io.github.deliciousbuding.cloud-path-app-button-indicator"
-	pluginVersion = "0.2.1"
+	pluginVersion = "0.2.2"
 
 	jobBootstrap  = "bootstrap"
 	jobHeartbeat  = "indicator-heartbeat"

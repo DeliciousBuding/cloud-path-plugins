@@ -1,10 +1,13 @@
 # cloud-path-app-button-indicator
 
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![CI](https://github.com/DeliciousBuding/cloud-path-app-button-indicator/actions/workflows/ci.yml/badge.svg)](https://github.com/DeliciousBuding/cloud-path-app-button-indicator/actions/workflows/ci.yml)
+
 A capability-only CloudPath **Application plugin** with a default walking light
 and an opt-in **service-call / acknowledge** workflow for duty desks and
 workstation requests. It is not a medical emergency or life-safety system.
 
-Version **0.2.1** requires **Core v0.2.29+** (Core <0.3.0) and public SDK v0.2.15+.
+Version **0.2.2** requires **Core v0.2.29+** (Core <0.3.0) and public SDK v0.2.15+.
 Status: **IMPLEMENTED** — package and Application Protocol tests are not
 real-device acceptance evidence.
 
@@ -295,3 +298,7 @@ Automated tests exercise the public Application Protocol wire, capability-only
 single/cross-device mappings, job schemas, coalescing, stale acknowledgements,
 concurrent jobs, effect-delivery errors and real timer behavior under Go's test
 clock. They never open a serial port or substitute for real-board verification.
+
+## License
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
