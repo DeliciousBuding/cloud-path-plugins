@@ -22,11 +22,11 @@ Core `v0.2.43+` 支持 monorepo catalog；指定插件 slug/id/path：
 ```bash
 cloudpath plugin install DeliciousBuding/cloud-path-plugins \
   --plugin scheduled-compartment \
-  --allow-unreviewed \
+  --digest sha256:<release-digest> \
   --yes
 ```
 
-单插件仓库的安装方式保持兼容。生产环境使用时应通过 `--digest`、Registry 或 attestation 提供独立信任证据，不应仅依赖同源 checksum。
+单插件仓库的安装方式保持兼容。安装时应通过 `--digest`、Registry 或 attestation 提供独立信任证据，不应仅依赖同源 checksum。
 
 ## 开发
 
