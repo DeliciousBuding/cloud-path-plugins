@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Command cloud-path-app-environment-guard serves the public Application RPC
 // over the authenticated transport injected by the host. It chooses no endpoint.
 package main

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Stdlib-only gate for this component's JSON-compatible YAML manifests.
 
 JSON is a YAML subset accepted by Core; using it here avoids an incomplete YAML
@@ -258,7 +259,7 @@ def strip_i18n(value):
 def validate(value):
     expected = {
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
-        "kind": "Application", "id": PLUGIN_ID, "version": "0.1.6",
+        "kind": "Application", "id": PLUGIN_ID, "version": "0.1.7",
         "protocol": 1, "entrypoint": ENTRYPOINT,
         "compatibility": {"core": ">=0.2.29 <0.3.0"},
         "permissions": {"hardware": [], "network": [], "filesystem": [], "secrets": []},

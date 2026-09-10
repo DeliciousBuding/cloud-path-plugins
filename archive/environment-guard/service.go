@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package environmentguard is a read-only, device-independent Application plugin.
 // It consumes public capability observations and emits only domain records and
 // a durable freshness schedule. It never samples devices or requests actions.
@@ -21,7 +23,7 @@ import (
 
 const (
 	pluginID          = "io.github.deliciousbuding.cloud-path-app-environment-guard"
-	pluginVersion     = "0.1.6"
+	pluginVersion     = "0.1.7"
 	jobBootstrap      = "bootstrap"
 	jobFreshness      = "check-freshness"
 	jobRefresh        = "refresh-status"

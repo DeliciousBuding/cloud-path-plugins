@@ -1,8 +1,13 @@
 # Environment Guard
 
-设备无关的 CloudPath Application 插件，版本 **0.1.6**。将已绑定的温度、光照观测变成工位环境快照和阈值变化记录，不轮询设备，不请求设备动作，不发送系统外通知。
+[![CI](https://github.com/DeliciousBuding/cloud-path-app-environment-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/DeliciousBuding/cloud-path-app-environment-guard/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/DeliciousBuding/cloud-path-app-environment-guard)](https://github.com/DeliciousBuding/cloud-path-app-environment-guard/releases)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Go](https://img.shields.io/github/go-mod/go-version/DeliciousBuding/cloud-path-app-environment-guard)](go.mod)
 
-状态：**IMPLEMENTED**。应用代码、行为测试和 public SDK RPC 可本地验证；安装运行、Core 观测扇入、真实来源单位/光敏方向及板测仍由集成验收确认。此仓库未发布、未部署。
+设备无关的 CloudPath Application 插件，版本 **0.1.7**。将已绑定的温度、光照观测变成工位环境快照和阈值变化记录，不轮询设备，不请求设备动作，不发送系统外通知。
+
+状态：**IMPLEMENTED**。应用代码、行为测试和 public SDK RPC 可本地验证；安装运行、Core 观测扇入、真实来源单位/光敏方向及板测仍由集成验收确认。发布物通过 GitHub Releases 分发；本仓不执行部署。
 
 ## Web UI 贡献
 
@@ -38,7 +43,7 @@ Manifest 声明 `ui.apiVersion: 1`，安装并启用实例后注册导航“环�
   "edge_id": "server",
   "instance_id": "desk-environment",
   "plugin_id": "io.github.deliciousbuding.cloud-path-app-environment-guard",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "enabled": true,
   "config": {
     "app_config": "{\"timezone\":\"UTC\",\"temperature_min\":18,\"temperature_max\":28,\"light_threshold\":null,\"stale_after_s\":120}"
@@ -132,7 +137,7 @@ Content-Type: application/json
 
 ## 构建、安装与验收
 
-Go 1.26.3，Python 3（校验器仅 stdlib）。plugin.yaml/requirements.yaml 使用 JSON 兼容 YAML，便于零依赖完整校验，Core 的 YAML 解析器可读取。正式 `go.mod` 固定 Core v0.2.15，无本地 replace。若 v0.2.15 尚未发布，需要在**临时、gitignored 的 modfile** 中引用集成方提供的 Core 工作树验证；这不能替代发布版依赖验证。发布版可用后运行 go mod download，核对并提交新生成的 go.sum；不能拿其他版本的校验和代替。
+Go 1.26.3，Python 3（校验器仅 stdlib）。plugin.yaml/requirements.yaml 使用 JSON 兼容 YAML，便于零依赖完整校验，Core 的 YAML 解析器可读取。正式 `go.mod` 固定发布版 Core v0.2.15，无本地 replace；`go.sum` 已固定依赖校验和。
 
 ```bash
 go mod download
@@ -147,14 +152,14 @@ go build -trimpath -o bin/cloud-path-app-environment-guard ./cmd/cloud-path-app-
 
 Windows 最后一条输出名加 .exe。插件由 Host 注入身份/传输启动，使用 public `pluginmain.Run + application.NewRPCServer`；不自行选择端点，无独立设备、网络、文件或 secret 权限。
 
-准备安装物时需同版本 `plugin.yaml`、本平台入口二进制及 SHA-256。工作流 [release.yml](.github/workflows/release.yml) 定义六个 OS/arch 二进制、manifest、checksums.txt；只有**获得发布授权并实际存在 release 后**才使用以下通用安装步骤：
+准备安装物时需同版本 `plugin.yaml`、本平台入口二进制及 SHA-256。工作流 [release.yml](.github/workflows/release.yml) 发布六个 OS/arch 二进制、manifest 和 checksums.txt。安装前请从对应 GitHub Release 核对 digest：
 
 ```bash
 cloudpath plugin install <repository-url-or-id> --digest sha256:<binary-digest> --yes
 cloudpath plugin enable io.github.deliciousbuding.cloud-path-app-environment-guard
 ```
 
-当前组件尚未发布，以上不是一个已经可下载的 release 地址。本地集成由宿主维护者将构建产物注册到隔离 catalog，再通过 Application 实例 API 配置和检查真实绑定；本仓不修改 Core 或生产 catalog。
+可下载的安装物位于 [Releases](https://github.com/DeliciousBuding/cloud-path-app-environment-guard/releases)。catalog 注册和真实绑定验收由宿主的隔离环境完成；本仓不修改 Core 或生产 catalog。
 
 验收顺序：
 
@@ -173,3 +178,7 @@ cloudpath plugin enable io.github.deliciousbuding.cloud-path-app-environment-gua
 - 无时间、无 sequence 的来源只能按实际到达检查新鲜度，应用无法识别上游重新包装的旧值。timestamp/quality 必须尽量由可信链路提供。
 - SDK 的效果发送没有数据库 ACK；本地 Send 成功不是 durable 落库或板测证明，断流期间中间变化只保留各槽位最后待发送记录。
 - 原始 ADC 方向/温度量纲、Core 扇入、手动按钮、浏览器投影和真机验收不在本组件本地测试所能证明的范围内。
+
+## License
+
+First-party code is licensed under the Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). The CloudPath SDK dependency remains under the MIT License; its notice is included in `NOTICE`.
