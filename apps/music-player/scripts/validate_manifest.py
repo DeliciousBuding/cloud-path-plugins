@@ -35,12 +35,15 @@ UI = {'apiVersion': 1,
                          {'type': 'metrics',
                           'source': 'records',
                           'recordType': 'music_session',
-                          'title': '播放概览',
+                          'title': '最近一次播放',
                           'description': '显示最近一次播放的歌曲、状态、进度和排队时间。',
                           'emptyText': '还没有播放记录。',
                           'fields': [{'key': 'song',
-                                      'label': '当前歌曲',
-                                      'values': {'little-star': '小星星', 'birthday': '生日歌', 'ode-to-joy': '欢乐颂'},
+                                      'label': '歌曲',
+                                      'values': {'little-star': '小星星',
+                                                 'birthday': '生日歌',
+                                                 'ode-to-joy': '欢乐颂',
+                                                 'custom': '自定义曲目'},
                                       'hideWhenEmpty': True},
                                      {'key': 'status',
                                       'label': '播放状态',
@@ -50,11 +53,11 @@ UI = {'apiVersion': 1,
                                                  'completed': '播放完成',
                                                  'failed': '播放失败'}},
                                      {'key': 'completed_notes',
-                                      'label': '播放进度',
-                                      'unit': '个音符',
+                                      'label': '已完成音符',
+                                      'unit': '个',
                                       'precision': 0,
                                       'hideWhenEmpty': True},
-                                     {'key': 'queued_at', 'label': '排队时间', 'format': 'time', 'hideWhenEmpty': True}]},
+                                     {'key': 'queued_at', 'label': '发起时间', 'format': 'time', 'hideWhenEmpty': True}]},
                          {'type': 'actions',
                           'source': 'manual-jobs',
                           'title': '播放控制',
@@ -71,7 +74,10 @@ UI = {'apiVersion': 1,
                                      {'key': 'summary', 'label': '播放概况'},
                                      {'key': 'song',
                                       'label': '歌曲',
-                                      'values': {'little-star': '小星星', 'birthday': '生日歌', 'ode-to-joy': '欢乐颂'}},
+                                      'values': {'little-star': '小星星',
+                                                 'birthday': '生日歌',
+                                                 'ode-to-joy': '欢乐颂',
+                                                 'custom': '自定义曲目'}},
                                      {'key': 'status',
                                       'label': '状态',
                                       'values': {'idle': '未开始',
@@ -80,10 +86,9 @@ UI = {'apiVersion': 1,
                                                  'completed': '播放完成',
                                                  'failed': '播放失败'}},
                                      {'key': 'queued_at',
-                                      'label': '排队时间',
+                                      'label': '发起时间',
                                       'format': 'time',
                                       'hideWhenEmpty': True}]}]}]}
-
 
 def unique_object(pairs):
     result = {}
@@ -114,7 +119,7 @@ def validate(value):
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
         "kind": "Application",
         "id": PLUGIN_ID,
-        "version": "0.2.6",
+        "version": "0.2.7",
         "protocol": 1,
         "entrypoint": ENTRYPOINT,
         "compatibility": {"core": ">=0.2.29 <0.3.0"},
@@ -171,7 +176,7 @@ def validate_tree(root, value):
                 errors.append(f"non-public import in {relative}: {name}")
             if name.startswith(CORE + "/") and not name.startswith(CORE + "/sdk/go/"):
                 errors.append(f"non-SDK Core import in {relative}: {name}")
-    if "Version **0.2.6**" not in (root / "README.md").read_text(encoding="utf-8"):
+    if "Version **0.2.7**" not in (root / "README.md").read_text(encoding="utf-8"):
         errors.append("README.md version does not match the manifest")
     return errors
 

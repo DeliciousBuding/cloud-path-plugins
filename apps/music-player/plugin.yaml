@@ -2,7 +2,7 @@
   "apiVersion": "plugins.cloudpath.dev/v1alpha1",
   "kind": "Application",
   "id": "io.github.deliciousbuding.cloud-path-app-music-player",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "protocol": 1,
   "entrypoint": "cloud-path-app-music-player",
   "compatibility": {
@@ -74,22 +74,23 @@
                   "type": "metrics",
                   "source": "records",
                   "recordType": "music_session",
-                  "title": "播放概览",
+                  "title": "最近一次播放",
                   "description": "显示最近一次播放的歌曲、状态、进度和排队时间。",
                   "emptyText": "还没有播放记录。",
                   "fields": [
                     {
                       "key": "song",
-                      "label": "当前歌曲",
+                      "label": "歌曲",
                       "values": {
                         "little-star": "小星星",
                         "birthday": "生日歌",
-                        "ode-to-joy": "欢乐颂"
+                        "ode-to-joy": "欢乐颂",
+                        "custom": "自定义曲目"
                       },
                       "hideWhenEmpty": true,
                       "i18n": {
-                        "zh-CN": "当前歌曲",
-                        "en-US": "Current song"
+                        "zh-CN": "歌曲",
+                        "en-US": "Song"
                       },
                       "valuesI18n": {
                         "little-star": {
@@ -103,6 +104,10 @@
                         "ode-to-joy": {
                           "zh-CN": "欢乐颂",
                           "en-US": "Ode to Joy"
+                        },
+                        "custom": {
+                          "zh-CN": "自定义曲目",
+                          "en-US": "Custom tune"
                         }
                       }
                     },
@@ -145,29 +150,29 @@
                     },
                     {
                       "key": "completed_notes",
-                      "label": "播放进度",
-                      "unit": "个音符",
+                      "label": "已完成音符",
+                      "unit": "个",
                       "precision": 0,
                       "hideWhenEmpty": true,
                       "i18n": {
-                        "zh-CN": "播放进度",
-                        "en-US": "Playback progress"
+                        "zh-CN": "已完成音符",
+                        "en-US": "Completed notes"
                       }
                     },
                     {
                       "key": "queued_at",
-                      "label": "排队时间",
+                      "label": "发起时间",
                       "format": "time",
                       "hideWhenEmpty": true,
                       "i18n": {
-                        "zh-CN": "排队时间",
-                        "en-US": "Queued at"
+                        "zh-CN": "发起时间",
+                        "en-US": "Started at"
                       }
                     }
                   ],
                   "i18n": {
-                    "zh-CN": "播放概览",
-                    "en-US": "Playback overview",
+                    "zh-CN": "最近一次播放",
+                    "en-US": "Latest playback",
                     "zh-CN.description": "显示最近一次播放的歌曲、状态、进度和排队时间。",
                     "en-US.description": "Show the song, status, progress, and queue time of the latest playback.",
                     "zh-CN.emptyText": "还没有播放记录。",
@@ -220,7 +225,8 @@
                       "values": {
                         "little-star": "小星星",
                         "birthday": "生日歌",
-                        "ode-to-joy": "欢乐颂"
+                        "ode-to-joy": "欢乐颂",
+                        "custom": "自定义曲目"
                       },
                       "i18n": {
                         "zh-CN": "歌曲",
@@ -238,6 +244,10 @@
                         "ode-to-joy": {
                           "zh-CN": "欢乐颂",
                           "en-US": "Ode to Joy"
+                        },
+                        "custom": {
+                          "zh-CN": "自定义曲目",
+                          "en-US": "Custom tune"
                         }
                       }
                     },
@@ -280,12 +290,12 @@
                     },
                     {
                       "key": "queued_at",
-                      "label": "排队时间",
+                      "label": "发起时间",
                       "format": "time",
                       "hideWhenEmpty": true,
                       "i18n": {
-                        "zh-CN": "排队时间",
-                        "en-US": "Queued at"
+                        "zh-CN": "发起时间",
+                        "en-US": "Started at"
                       }
                     }
                   ],
