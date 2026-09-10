@@ -26,6 +26,14 @@ python scripts/validate_manifest.py plugin.yaml --dir .
 
 Driver 只依赖 CloudPath 公开 SDK，禁止 import cloud-path/internal/**。
 
+## Install and run
+
+Release assets include `plugin.yaml`, Linux `amd64`/`arm64` and Windows `amd64` binaries, plus `.sha256` files. Download the binary matching the Edge host, verify its checksum, and install `plugin.yaml` through the Edge plugin mechanism for that Edge version.
+
+- Windows: install the CH340/USB serial driver and use `COMx`; Linux: the Edge account needs access to the serial device (usually membership in `dialout`).
+- Only one process may own a serial port. Stop Edge before flashing firmware, then restart it after the board returns to Full Firmware.
+- Keep `device_id`, `port`, `baud`, and `protocol` unchanged while a device is open. Change the binding only after `CloseDevice`; conflicting reopen requests are rejected.
+
 ## Edge configuration
 
 同一个 Edge 可配置多块板；每块板必须有独立 device id、port 和本地生命周期：
