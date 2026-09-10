@@ -1,0 +1,59 @@
+# CloudPath Driver Plugin manifest (v1alpha1).
+# Shape follows spec/plugin-manifest.schema.json in the cloud-path core repo.
+#
+# Incubation status: this repository is the independent Driver Plugin formerly
+# known as examples/stcb inside the cloud-path monorepo. Core production binaries
+# no longer blank-import STC-B; the driver is installed from GitHub and run by the
+# Edge Plugin Host. Once published, every field below is stable for the lifetime
+# of this schema version.
+apiVersion: plugins.cloudpath.dev/v1alpha1
+kind: Driver
+id: io.github.deliciousbuding.cloud-path-driver-stcb
+version: 0.2.13
+license: Apache-2.0
+protocol: 1
+entrypoint: cloudpath-driver-stcb
+compatibility:
+  core: ">=0.2.0 <0.3.0"
+permissions:
+  # The adapter only opens a serial port; the list must stay identical with
+  # what the driver actually uses and must never grow silently in a patch.
+  hardware: [serial]
+  network: []
+  filesystem: []
+  secrets: []
+capabilities:
+  - cloudpath.dev/capability/clock@1
+  - cloudpath.dev/capability/temperature@1
+  - cloudpath.dev/capability/illuminance@1
+  - cloudpath.dev/capability/analog-input@1
+  - cloudpath.dev/capability/navigation@1
+  - cloudpath.dev/capability/hall@1
+  - cloudpath.dev/capability/vibration@1
+  - cloudpath.dev/capability/key@1
+  - cloudpath.dev/capability/buzzer@1
+  - cloudpath.dev/capability/led@1
+  - cloudpath.dev/capability/display-text@1
+  - cloudpath.dev/capability/motor@1
+  # Publisher namespace on purpose: board-level raw port dump is driver-specific
+  # vocabulary, and reusing cloudpath.dev/capability/diagnostics@1 collides with the
+  # core reference demo adapter (actions dump/noop/ping), which then shadows `diag`
+  # in the server capability catalog. See docs/architecture/capability-model.md.
+  - io.github.deliciousbuding/capability/board-diagnostics@1
+contributes:
+  # The contribution id is stable and distinct from the plugin id; it equals
+  # the registered adapter name (Adapter.Name() == "stcb").
+  drivers:
+    - id: stcb
+      title: STC-B Driver
+      discovery: manual
+      ui:
+        apiVersion: 1
+        device:
+          sections:
+            - type: status
+              source: device
+            - type: diagnostics
+              source: diagnostics
+            - type: actions
+              source: device-actions
