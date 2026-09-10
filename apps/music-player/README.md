@@ -4,13 +4,13 @@
 把内置歌曲每轮重复压成一条 `tone-sequence` 命令，把单音压成一条 `tone` 命令，并维护当前 `music_session` 状态。
 它不直接访问串口、浏览器、烧录工具或现网配置，只使用 Core 绑定后提供的实体 ID。
 
-Version **0.2.7**；需要 Core `>=0.2.29 <0.3.0` 和公开 Go SDK v0.2.15+。
+Version **0.3.0**；需要 Core `>=0.2.29 <0.3.0` 和公开 Go SDK v0.2.15+。
 状态：`IMPLEMENTED`。仓库测试使用 fake event stream / fake effect writer，
 不是真板或现场验收证据。
 
 ## Web UI 贡献
 
-Manifest 声明 `ui.apiVersion: 1`，安装实例后注册导航“音乐播放器”和独立路由 `/apps/music`。停用后入口仍保留，页面会明确显示当前未启用。首页由 Core 白名单 section 渲染：播放会话状态、来自 `music_session` 记录的指标、`play-song` / `play-note` 手动操作和 `music_session` 时间线；不注入 JavaScript、HTML 或远程资源。当前配置为空，因此不显示配置表单。
+Manifest 声明 `ui.apiVersion: 1`，安装实例后注册导航“音乐播放器”和独立路由 `/apps/music`。停用后入口仍保留，页面会明确显示当前未启用。首页由 Core 白名单 section 渲染：播放会话状态、来自 `music_session` 记录的指标、每首内置曲目一个 `play-*` 按钮和 `play-note`、以及 `music_session` 时间线；不注入 JavaScript、HTML 或远程资源。当前配置为空，因此不显示配置表单。
 
 ## Capability requirements
 
@@ -28,7 +28,7 @@ Manifest 声明 `ui.apiVersion: 1`，安装实例后注册导航“音乐播放�
 
 ## Configuration
 
-版本 0.2.7 没有业务配置字段。`app_config` 必须是空 JSON object：
+版本 0.3.0 没有业务配置字段。`app_config` 必须是空 JSON object：
 
 ```json
 {}
@@ -54,21 +54,26 @@ Manifest 声明 `ui.apiVersion: 1`，安装实例后注册导航“音乐播放�
 
 ## Manual jobs
 
-三个 job 都是 `ManualOnly`，不会被自动分钟调度器当作后台任务执行。
+五个 job 都是 `ManualOnly`，不会被自动分钟调度器当作后台任务执行。
+
+每首内置曲目对应一个**无参数** job，前端会直接把它渲染成一个按钮，
+用户打开页面即可看到「播放小星星」这类可点动作，而不是先填一张表。
 
 | Job | Args | 约束 |
 |---|---|---|
-| `play-song` | `{"song":"little-star"|"birthday"|"ode-to-joy","repeat":1..3}` | 内置曲目必须存在；`repeat` 重复整首旋律 |
+| `play-little-star` | `{"repeat":1..3}`（可省略，默认 1） | 播放《小星星》 |
+| `play-birthday` | `{"repeat":1..3}`（可省略，默认 1） | 播放《生日歌》 |
+| `play-ode-to-joy` | `{"repeat":1..3}`（可省略，默认 1） | 播放《欢乐颂》 |
 | `play-note` | `{"frequency_hz":1..4000,"duration_ms":10..1200}` | `duration_ms` 必须是 10 的倍数 |
 | `status` | `{}` | 只读取并返回当前 `music_session`，不发送设备命令 |
 
-`play-song` 的三个曲目名和 `play-note` 的数值边界同时写入
-`JobDescriptor.InputSchemaJSON` 与运行时代码校验。未知 song、未知字段、
+曲目由 `songs.go` 的 `songCatalog` 内置；`play-note` 的数值边界同时写入
+`JobDescriptor.InputSchemaJSON` 与运行时代码校验。未知 job、未知字段、
 非整数、越界频率、非 10 倍数或越界时长都会在发出任何 effect 之前拒绝。
 
 ## 播放契约
 
-对 `play-song`，应用按曲目定义的音符顺序展开 `repeat` 次，每一轮重复生成
+对任一 `play-*` 曲目 job，应用按曲目定义的音符顺序展开 `repeat` 次，每一轮重复生成
 一条 `tone-sequence` 命令；对 `play-note`，只生成一个 `tone` 音符命令。
 一个实例同一时间只维护一个 `queued` / `playing` 会话；上一会话完成或失败前，
 新的播放 job 会返回 `FAILED_PRECONDITION`。`tone-sequence` 的 Driver 侧契约是：

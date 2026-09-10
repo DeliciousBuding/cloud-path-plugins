@@ -36,7 +36,7 @@ UI = {'apiVersion': 1,
                           'source': 'records',
                           'recordType': 'music_session',
                           'title': '最近一次播放',
-                          'description': '显示最近一次播放的歌曲、状态、进度和排队时间。',
+                          'description': '显示最近一次播放的歌曲、状态、已完成音符和发起时间。',
                           'emptyText': '还没有播放记录。',
                           'fields': [{'key': 'song',
                                       'label': '歌曲',
@@ -61,7 +61,7 @@ UI = {'apiVersion': 1,
                          {'type': 'actions',
                           'source': 'manual-jobs',
                           'title': '播放控制',
-                          'description': '选择“播放内置歌曲”播放预设曲目，或使用“播放单音”播放单个音符。',
+                          'description': '点一首内置曲目即可播放，也可以播放单个音符。',
                           'emptyText': '暂无可用的播放操作。'},
                          {'type': 'records',
                           'source': 'records',
@@ -119,7 +119,7 @@ def validate(value):
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
         "kind": "Application",
         "id": PLUGIN_ID,
-        "version": "0.2.7",
+        "version": "0.3.0",
         "protocol": 1,
         "entrypoint": ENTRYPOINT,
         "compatibility": {"core": ">=0.2.29 <0.3.0"},
@@ -176,7 +176,7 @@ def validate_tree(root, value):
                 errors.append(f"non-public import in {relative}: {name}")
             if name.startswith(CORE + "/") and not name.startswith(CORE + "/sdk/go/"):
                 errors.append(f"non-SDK Core import in {relative}: {name}")
-    if "Version **0.2.7**" not in (root / "README.md").read_text(encoding="utf-8"):
+    if "Version **0.3.0**" not in (root / "README.md").read_text(encoding="utf-8"):
         errors.append("README.md version does not match the manifest")
     return errors
 

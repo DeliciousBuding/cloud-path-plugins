@@ -15,16 +15,26 @@ import (
 )
 
 const (
-	jobPlaySong = "play-song"
-	jobPlayNote = "play-note"
-	jobStatus   = "status"
+	// 一首歌一个 job：UI 会把无参数操作直接渲染成按钮，按钮文案就是曲名，
+	// 普通用户打开页面即可看到「播放小星星」这类可点动作，而不是一个下拉框。
+	jobPlayLittleStar = "play-little-star"
+	jobPlayBirthday   = "play-birthday"
+	jobPlayOdeToJoy   = "play-ode-to-joy"
+	jobPlayNote       = "play-note"
+	jobStatus         = "status"
 
 	maxJobArgsBytes = 8192
 )
 
+// songForJob 把每首歌的 job 映射到内置曲目 key。
+var songForJob = map[string]string{
+	jobPlayLittleStar: songLittleStar,
+	jobPlayBirthday:   songBirthday,
+	jobPlayOdeToJoy:   songOdeToJoy,
+}
+
 type playSongArgs struct {
-	Song   string `json:"song"`
-	Repeat int    `json:"repeat"`
+	Repeat int `json:"repeat"`
 }
 
 type playNoteArgs struct {
@@ -39,23 +49,31 @@ type playSequenceArgs struct {
 
 type emptyArgs struct{}
 
+// songJobDescriptor 声明一个无参数（可带可选 repeat）的曲目按钮。
+// 无 required 字段意味着前端会把它渲染成直接可见的按钮，而不是折叠表单。
+func songJobDescriptor(id, title string) application.JobDescriptor {
+	return application.JobDescriptor{
+		ID:              id,
+		Title:           title,
+		ManualOnly:      true,
+		InputSchemaJSON: `{"type":"object","additionalProperties":false,"properties":{"repeat":{"type":"integer","minimum":1,"maximum":3,"default":1,"title":"重复次数"}}}`,
+	}
+}
+
 func jobDescriptors() []application.JobDescriptor {
 	return []application.JobDescriptor{
-		{
-			ID:              jobPlaySong,
-			Title:           "播放内置歌曲",
-			ManualOnly:      true,
-			InputSchemaJSON: `{"type":"object","additionalProperties":false,"required":["song","repeat"],"properties":{"song":{"type":"string","enum":["little-star","birthday","ode-to-joy"],"title":"歌曲"},"repeat":{"type":"integer","minimum":1,"maximum":3,"title":"重复次数"}}}`,
-		},
+		songJobDescriptor(jobPlayLittleStar, "播放小星星"),
+		songJobDescriptor(jobPlayBirthday, "播放生日歌"),
+		songJobDescriptor(jobPlayOdeToJoy, "播放欢乐颂"),
 		{
 			ID:              jobPlayNote,
-			Title:           "播放单音",
+			Title:           "播放单音（Hz / ms）",
 			ManualOnly:      true,
 			InputSchemaJSON: `{"type":"object","additionalProperties":false,"required":["frequency_hz","duration_ms"],"properties":{"frequency_hz":{"type":"integer","minimum":1,"maximum":4000,"title":"频率 Hz"},"duration_ms":{"type":"integer","minimum":10,"maximum":1200,"multipleOf":10,"title":"时长 ms"}}}`,
 		},
 		{
 			ID:              jobStatus,
-			Title:           "查看音乐会话状态",
+			Title:           "刷新播放状态",
 			ManualOnly:      true,
 			InputSchemaJSON: `{"type":"object","additionalProperties":false,"properties":{}}`,
 		},
@@ -112,25 +130,25 @@ func (s *Service) RunJob(ctx context.Context, req *application.RunJobRequest) (*
 		repeat    int
 	)
 	switch req.JobID {
-	case jobPlaySong:
+	case jobPlayLittleStar, jobPlayBirthday, jobPlayOdeToJoy:
 		var args playSongArgs
 		if err := decodeStrictArgs(req.ArgsJSON, &args); err != nil {
-			return nil, status.Errorf(status.CodeInvalidArgument, "invalid play-song arguments: %v", err)
+			return nil, status.Errorf(status.CodeInvalidArgument, "invalid playback arguments: %v", err)
 		}
-		if args.Song != strings.TrimSpace(args.Song) || args.Song == "" {
-			return nil, status.Errorf(status.CodeInvalidArgument, "song must be one of little-star, birthday, ode-to-joy")
+		repeat = args.Repeat
+		if repeat == 0 {
+			repeat = 1
 		}
-		if args.Repeat < 1 || args.Repeat > 3 {
+		if repeat < 1 || repeat > 3 {
 			return nil, status.Errorf(status.CodeInvalidArgument, "repeat must be an integer from 1 to 3")
 		}
 		var err error
-		notes, err = notesForSong(args.Song)
+		song = songForJob[req.JobID]
+		notes, err = notesForSong(song)
 		if err != nil {
-			return nil, status.Errorf(status.CodeInvalidArgument, "unknown song %q", args.Song)
+			return nil, status.Errorf(status.CodeInvalidArgument, "unknown song %q", song)
 		}
-		song = args.Song
-		repeat = args.Repeat
-		canonical = mustJSON(args)
+		canonical = mustJSON(playSongArgs{Repeat: repeat})
 	case jobPlayNote:
 		var args playNoteArgs
 		if err := decodeStrictArgs(req.ArgsJSON, &args); err != nil {

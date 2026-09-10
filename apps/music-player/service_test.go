@@ -238,7 +238,7 @@ func requestCommands(effects []*application.ApplicationEffect) []*application.Re
 	return commands
 }
 
-const musicPlayerUIJSON = `{"apiVersion":1,"navigation":{"title":"音乐播放器","icon":"music","order":50,"route":"music","visibility":"always"},"pages":[{"id":"home","title":"音乐播放器","description":"可以远程选择内置歌曲并播放，也可以播放一个指定音符。","sections":[{"type":"status","source":"instance","title":"播放设备","description":"查看音乐播放器当前是否可用。","emptyText":"暂无设备状态。"},{"type":"metrics","source":"records","recordType":"music_session","title":"最近一次播放","description":"显示最近一次播放的歌曲、状态、进度和排队时间。","emptyText":"还没有播放记录。","fields":[{"key":"song","label":"歌曲","values":{"little-star":"小星星","birthday":"生日歌","ode-to-joy":"欢乐颂","custom":"自定义曲目"},"hideWhenEmpty":true},{"key":"status","label":"播放状态","values":{"idle":"未开始","queued":"等待播放","playing":"播放中","completed":"播放完成","failed":"播放失败"}},{"key":"completed_notes","label":"已完成音符","unit":"个","precision":0,"hideWhenEmpty":true},{"key":"queued_at","label":"发起时间","format":"time","hideWhenEmpty":true}]},{"type":"actions","source":"manual-jobs","title":"播放控制","description":"选择“播放内置歌曲”播放预设曲目，或使用“播放单音”播放单个音符。","emptyText":"暂无可用的播放操作。"},{"type":"records","source":"records","recordType":"music_session","presentation":"timeline","title":"播放记录","description":"按时间查看最近的播放情况。","emptyText":"还没有播放记录。","fields":[{"key":"title","label":"标题"},{"key":"summary","label":"播放概况"},{"key":"song","label":"歌曲","values":{"little-star":"小星星","birthday":"生日歌","ode-to-joy":"欢乐颂","custom":"自定义曲目"}},{"key":"status","label":"状态","values":{"idle":"未开始","queued":"等待播放","playing":"播放中","completed":"播放完成","failed":"播放失败"}},{"key":"queued_at","label":"发起时间","format":"time","hideWhenEmpty":true}]}]}]}`
+const musicPlayerUIJSON = `{"apiVersion":1,"navigation":{"title":"音乐播放器","icon":"music","order":50,"route":"music","visibility":"always"},"pages":[{"id":"home","title":"音乐播放器","description":"可以远程选择内置歌曲并播放，也可以播放一个指定音符。","sections":[{"type":"status","source":"instance","title":"播放设备","description":"查看音乐播放器当前是否可用。","emptyText":"暂无设备状态。"},{"type":"metrics","source":"records","recordType":"music_session","title":"最近一次播放","description":"显示最近一次播放的歌曲、状态、已完成音符和发起时间。","emptyText":"还没有播放记录。","fields":[{"key":"song","label":"歌曲","values":{"little-star":"小星星","birthday":"生日歌","ode-to-joy":"欢乐颂","custom":"自定义曲目"},"hideWhenEmpty":true},{"key":"status","label":"播放状态","values":{"idle":"未开始","queued":"等待播放","playing":"播放中","completed":"播放完成","failed":"播放失败"}},{"key":"completed_notes","label":"已完成音符","unit":"个","precision":0,"hideWhenEmpty":true},{"key":"queued_at","label":"发起时间","format":"time","hideWhenEmpty":true}]},{"type":"actions","source":"manual-jobs","title":"播放控制","description":"点一首内置曲目即可播放，也可以播放单个音符。","emptyText":"暂无可用的播放操作。"},{"type":"records","source":"records","recordType":"music_session","presentation":"timeline","title":"播放记录","description":"按时间查看最近的播放情况。","emptyText":"还没有播放记录。","fields":[{"key":"title","label":"标题"},{"key":"summary","label":"播放概况"},{"key":"song","label":"歌曲","values":{"little-star":"小星星","birthday":"生日歌","ode-to-joy":"欢乐颂","custom":"自定义曲目"}},{"key":"status","label":"状态","values":{"idle":"未开始","queued":"等待播放","playing":"播放中","completed":"播放完成","failed":"播放失败"}},{"key":"queued_at","label":"发起时间","format":"time","hideWhenEmpty":true}]}]}]}`
 
 func TestDescriptorAndManifestIdentity(t *testing.T) {
 	svc := New()
@@ -266,7 +266,7 @@ func TestDescriptorAndManifestIdentity(t *testing.T) {
 			t.Fatalf("unexpected requirement: %+v", requirement)
 		}
 	}
-	if len(desc.Jobs) != 3 {
+	if len(desc.Jobs) != 5 {
 		t.Fatalf("jobs = %+v", desc.Jobs)
 	}
 	for _, job := range desc.Jobs {
@@ -313,7 +313,7 @@ func TestDescriptorAndManifestIdentity(t *testing.T) {
 
 func TestPlaySongQueuesOneSequenceCommandAndRecord(t *testing.T) {
 	h := newHarness(t, testBindings)
-	response, err := h.run(jobPlaySong, `{"song":"little-star","repeat":1}`, "song-1")
+	response, err := h.run(jobPlayLittleStar, `{"repeat":1}`, "song-1")
 	if err != nil || !response.Status.IsOK() {
 		t.Fatalf("RunJob: %+v, %v", response, err)
 	}
@@ -397,10 +397,10 @@ func TestPlayNoteBoundsAndValidation(t *testing.T) {
 	}
 
 	before := h.writer.count()
-	if _, err := h.run(jobPlaySong, `{"song":"unknown","repeat":1}`, "unknown-song"); err == nil {
-		t.Fatal("unknown song accepted")
+	if _, err := h.run("play-song", `{"repeat":1}`, "retired-job"); err == nil {
+		t.Fatal("retired play-song job accepted")
 	}
-	if _, err := h.run(jobPlaySong, `{"song":"birthday","repeat":4}`, "bad-repeat"); err == nil {
+	if _, err := h.run(jobPlayBirthday, `{"repeat":4}`, "bad-repeat"); err == nil {
 		t.Fatal("out-of-range repeat accepted")
 	}
 	if got := h.writer.count(); got != before {
@@ -410,7 +410,7 @@ func TestPlayNoteBoundsAndValidation(t *testing.T) {
 
 func TestRequestCompletedAdvancesAndCompletesSession(t *testing.T) {
 	h := newHarness(t, testBindings)
-	response, err := h.run(jobPlaySong, `{"song":"ode-to-joy","repeat":2}`, "complete-song")
+	response, err := h.run(jobPlayOdeToJoy, `{"repeat":2}`, "complete-song")
 	if err != nil || !response.Status.IsOK() {
 		t.Fatalf("RunJob: %+v, %v", response, err)
 	}
@@ -523,7 +523,7 @@ func TestRequestCompletedFailureAndNonTerminalStates(t *testing.T) {
 
 func TestToneFailureDoesNotQueueNextRepetition(t *testing.T) {
 	h := newHarness(t, testBindings)
-	response, err := h.run(jobPlaySong, `{"song":"little-star","repeat":3}`, "stop-on-failure")
+	response, err := h.run(jobPlayLittleStar, `{"repeat":3}`, "stop-on-failure")
 	if err != nil || !response.Status.IsOK() {
 		t.Fatalf("RunJob: %+v, %v", response, err)
 	}
@@ -563,7 +563,7 @@ func TestTerminalRequestCompletedFailsSessionAndStopsSequence(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			h := newHarness(t, testBindings)
-			response, err := h.run(jobPlaySong, `{"song":"little-star","repeat":3}`, "terminal-"+test.name)
+			response, err := h.run(jobPlayLittleStar, `{"repeat":3}`, "terminal-"+test.name)
 			if err != nil || !response.Status.IsOK() {
 				t.Fatalf("RunJob: %+v, %v", response, err)
 			}
@@ -633,7 +633,7 @@ func TestTerminalRequestCompletedFailsSessionAndStopsSequence(t *testing.T) {
 
 func TestRequestCompletedIgnoresOutOfOrderAndDuplicateEvents(t *testing.T) {
 	h := newHarness(t, testBindings)
-	response, err := h.run(jobPlaySong, `{"song":"little-star","repeat":3}`, "ordered-song")
+	response, err := h.run(jobPlayLittleStar, `{"repeat":3}`, "ordered-song")
 	if err != nil || !response.Status.IsOK() {
 		t.Fatalf("RunJob: %+v, %v", response, err)
 	}
@@ -726,8 +726,8 @@ func TestRequestCompletedIgnoresOutOfOrderAndDuplicateEvents(t *testing.T) {
 
 func TestIdempotencyKeyIsStableAndRejectsDrift(t *testing.T) {
 	h := newHarness(t, testBindings)
-	args := `{"song":"birthday","repeat":2}`
-	first, err := h.run(jobPlaySong, args, "same-key")
+	args := `{"repeat":2}`
+	first, err := h.run(jobPlayBirthday, args, "same-key")
 	if err != nil || !first.Status.IsOK() {
 		t.Fatalf("first run: %+v, %v", first, err)
 	}
@@ -735,7 +735,7 @@ func TestIdempotencyKeyIsStableAndRejectsDrift(t *testing.T) {
 	firstRecord := lastSessionRecord(t, h.writer.snapshot())
 	firstRequestID := firstRecord["request_id"]
 
-	second, err := h.run(jobPlaySong, args, "same-key")
+	second, err := h.run(jobPlayBirthday, args, "same-key")
 	if err != nil || !second.Status.IsOK() {
 		t.Fatalf("second run: %+v, %v", second, err)
 	}
@@ -747,7 +747,7 @@ func TestIdempotencyKeyIsStableAndRejectsDrift(t *testing.T) {
 		t.Fatalf("request_id changed on retry: %v -> %v", firstRequestID, secondRecord["request_id"])
 	}
 
-	if _, err := h.run(jobPlaySong, `{"song":"birthday","repeat":1}`, "same-key"); err == nil {
+	if _, err := h.run(jobPlayBirthday, `{"repeat":1}`, "same-key"); err == nil {
 		t.Fatal("idempotency key reuse with different args was accepted")
 	} else {
 		var st *status.Status
@@ -845,7 +845,7 @@ func TestSongCatalogNotesSatisfyToneContract(t *testing.T) {
 
 func TestSingleActiveSessionAndRebindingGuard(t *testing.T) {
 	h := newHarness(t, testBindings)
-	first, err := h.run(jobPlaySong, `{"song":"little-star","repeat":1}`, "active-1")
+	first, err := h.run(jobPlayLittleStar, `{"repeat":1}`, "active-1")
 	if err != nil || !first.Status.IsOK() {
 		t.Fatalf("first session: %+v, %v", first, err)
 	}

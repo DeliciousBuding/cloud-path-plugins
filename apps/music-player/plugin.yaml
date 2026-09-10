@@ -2,7 +2,7 @@
   "apiVersion": "plugins.cloudpath.dev/v1alpha1",
   "kind": "Application",
   "id": "io.github.deliciousbuding.cloud-path-app-music-player",
-  "version": "0.2.7",
+  "version": "0.3.0",
   "protocol": 1,
   "entrypoint": "cloud-path-app-music-player",
   "compatibility": {
@@ -75,7 +75,7 @@
                   "source": "records",
                   "recordType": "music_session",
                   "title": "最近一次播放",
-                  "description": "显示最近一次播放的歌曲、状态、进度和排队时间。",
+                  "description": "显示最近一次播放的歌曲、状态、已完成音符和发起时间。",
                   "emptyText": "还没有播放记录。",
                   "fields": [
                     {
@@ -173,8 +173,8 @@
                   "i18n": {
                     "zh-CN": "最近一次播放",
                     "en-US": "Latest playback",
-                    "zh-CN.description": "显示最近一次播放的歌曲、状态、进度和排队时间。",
-                    "en-US.description": "Show the song, status, progress, and queue time of the latest playback.",
+                    "zh-CN.description": "显示最近一次播放的歌曲、状态、已完成音符和发起时间。",
+                    "en-US.description": "Show the song, status, completed notes, and start time of the latest playback.",
                     "zh-CN.emptyText": "还没有播放记录。",
                     "en-US.emptyText": "No playback records yet."
                   }
@@ -183,13 +183,13 @@
                   "type": "actions",
                   "source": "manual-jobs",
                   "title": "播放控制",
-                  "description": "选择“播放内置歌曲”播放预设曲目，或使用“播放单音”播放单个音符。",
+                  "description": "点一首内置曲目即可播放，也可以播放单个音符。",
                   "emptyText": "暂无可用的播放操作。",
                   "i18n": {
                     "zh-CN": "播放控制",
                     "en-US": "Playback controls",
-                    "zh-CN.description": "选择“播放内置歌曲”播放预设曲目，或使用“播放单音”播放单个音符。",
-                    "en-US.description": "Choose Play built-in song to play a preset track, or Play note to play a single note.",
+                    "zh-CN.description": "点一首内置曲目即可播放，也可以播放单个音符。",
+                    "en-US.description": "Tap a built-in track to play it, or play a single note.",
                     "zh-CN.emptyText": "暂无可用的播放操作。",
                     "en-US.emptyText": "No playback actions are available."
                   }

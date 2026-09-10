@@ -75,13 +75,13 @@ func sessionSummary(session *musicSession, displayBound, indicatorBound bool) st
 	}
 	switch session.Status {
 	case statusQueued:
-		return fmt.Sprintf("会话 %s 已排队，共 %d 个音符；等待设备回执。%s", session.RequestID, session.TotalNotes, optional)
+		return fmt.Sprintf("已排队，共 %d 个音符；等待设备回执。%s", session.TotalNotes, optional)
 	case statusPlaying:
-		return fmt.Sprintf("会话 %s 正在播放，已完成 %d/%d 个音符。%s", session.RequestID, session.CompletedNotes, session.TotalNotes, optional)
+		return fmt.Sprintf("正在播放，已完成 %d/%d 个音符。%s", session.CompletedNotes, session.TotalNotes, optional)
 	case statusCompleted:
-		return fmt.Sprintf("会话 %s 已完成，共 %d 个音符。%s", session.RequestID, session.TotalNotes, optional)
+		return fmt.Sprintf("已完成播放，共 %d 个音符。%s", session.TotalNotes, optional)
 	case statusFailed:
-		return fmt.Sprintf("会话 %s 失败，已完成 %d/%d 个音符。%s", session.RequestID, session.CompletedNotes, session.TotalNotes, optional)
+		return fmt.Sprintf("播放失败，已完成 %d/%d 个音符。%s", session.CompletedNotes, session.TotalNotes, optional)
 	default:
 		return "尚未创建音乐会话。"
 	}
