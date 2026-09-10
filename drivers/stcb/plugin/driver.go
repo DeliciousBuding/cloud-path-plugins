@@ -19,7 +19,7 @@ import (
 // 稳定身份（一经发布即为机器契约，破坏性语义变化升 @2，不得原地改 @1）。
 const (
 	pluginID      = "io.github.deliciousbuding.cloud-path-driver-stcb"
-	pluginVersion = "0.2.10"
+	pluginVersion = "0.2.11"
 
 	// driverID 是 Describe 上报的稳定 driver 标识，与 plugin.yaml contributes.drivers[0].id 一致。
 	driverID = "stcb"
@@ -92,8 +92,8 @@ func mustJSON(v any) string {
 var buzzerActionSchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
-		"freq":     map[string]any{"type": "integer", "minimum": 0, "maximum": 9, "title": "频率档"},
-		"duration": map[string]any{"type": "integer", "minimum": 0, "maximum": 9, "title": "时长档"},
+		"freq":     map[string]any{"type": "integer", "minimum": 1, "maximum": 8, "title": "频率档"},
+		"duration": map[string]any{"type": "integer", "minimum": 0, "maximum": 8, "title": "时长档"},
 	},
 	"required": []any{"freq", "duration"},
 }

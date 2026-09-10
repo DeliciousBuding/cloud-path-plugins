@@ -201,8 +201,8 @@ func encodeV1Command(id, action, argsJSON string) ([]byte, error) {
 		if err := json.Unmarshal([]byte(argsJSON), &a); err != nil {
 			return nil, fmt.Errorf("stcb: buzzer args: %w", err)
 		}
-		if a.Freq < 0 || a.Freq > 9 || a.Duration < 0 || a.Duration > 9 {
-			return nil, fmt.Errorf("stcb: buzzer freq/duration must be 0-9")
+		if a.Freq < 1 || a.Freq > 8 || a.Duration < 0 || a.Duration > 8 {
+			return nil, fmt.Errorf("stcb: buzzer freq must be 1-8 and duration 0-8")
 		}
 		args = fmt.Sprintf("freq=%d,dur=%d", freqTable[a.Freq], durationTable[a.Duration])
 		verb = "beep"

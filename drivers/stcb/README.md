@@ -91,9 +91,9 @@ Alarm、compartment、服药时段不属于板载 Driver；这些业务只由 Ap
 - `diag` 只存在于 Protocol v1（`CMD:<id>:diag`）。legacy 单字符 `D` 在板上是 ISP 下载模式，
   Driver 不会把诊断命令编成 `D`（单测锁定）。`tone` 同样只存在于 Protocol v1；legacy 明确拒绝，不会降级成档位 `buzzer`。
 - Legacy `V/B/L/N/T` 只用于旧探针固件 bring-up：没有关联 ACK，Driver 只诚实报告下发与回帧事实。
-- 两种协议都在写 UART 前校验动作声明：`buzzer` 必须同时提供 `freq` / `duration`，`motor` 必须提供
+- 两种协议都在写 UART 前校验动作声明：`buzzer` 必须同时提供 `freq`（1–8）/ `duration`（0–8）；`motor` 必须提供
   `steps`；`tone` 必须且只能提供整数 `frequency_hz`（1–4000）/ `duration_ms`（10–1200，且为 10 的倍数）；`tone-sequence` 接受 1–64 个同样范围的音符和可选 `gap_ms`（0–1000，10 的倍数）；`led` 的 `mask` / `pattern` 和 `display` 的 `digits` / `codes` / `mode` 分别只能选一种；`display.mode` 可取 `clock`、`date`、`sensors`、`io`、`version`。
-  缺值、`null` 或多个方案会返回错误；既有 `buzzer` / `motor` 等动作的显式 `0` 仍合法，`tone` 的 0 越界。Legacy LED 仅支持 `pattern`；`mask` 须使用 v1。
+  缺值、`null` 或多个方案会返回错误；`buzzer.duration`、`motor`、`led.pattern` 等动作的显式 `0` 仍合法；`buzzer.freq` 与 `tone.frequency_hz` 的 0 越界。Legacy LED 仅支持 `pattern`；`mask` 须使用 v1。
 - v1 `sync.time` 只接受有效 `HHMMSS`，`sync.hhmm` 只接受有效 `HHMM`；两者同时存在时沿用 `time`
   优先的兼容行为，空参数仍自动北京时间校时。Legacy `raw` 的 JSON 解码结果最多 64 UTF-8 字节，
   不接受 CR / LF / NUL；这些控制字符也不能进入 v1 命令 ID。
@@ -104,7 +104,7 @@ Alarm、compartment、服药时段不属于板载 Driver；这些业务只由 Ap
 
 - plugin id: io.github.deliciousbuding.cloud-path-driver-stcb
 - driver id: stcb
-- version: 0.2.10
+- version: 0.2.11
 - protocol: CloudPath Driver Protocol 1
 - compatibility: CloudPath Core >=0.2.0 <0.3.0
 - permission: hardware [serial]

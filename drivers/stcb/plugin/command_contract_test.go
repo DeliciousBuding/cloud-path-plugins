@@ -17,6 +17,9 @@ func TestDeclaredInputContractRejectsBeforeEncoding(t *testing.T) {
 		{"buzzer-missing-duration", "buzzer", "{\"freq\":1}"},
 		{"buzzer-empty", "buzzer", "{}"},
 		{"buzzer-null", "buzzer", "{\"freq\":null,\"duration\":1}"},
+		{"buzzer-frequency-zero", "buzzer", "{\"freq\":0,\"duration\":1}"},
+		{"buzzer-frequency-high", "buzzer", "{\"freq\":9,\"duration\":1}"},
+		{"buzzer-duration-high", "buzzer", "{\"freq\":1,\"duration\":9}"},
 		{"motor-empty", "motor", "{}"},
 		{"root-null", "motor", "null"},
 		{"root-array", "motor", "[]"},
@@ -87,7 +90,7 @@ func TestInvalidV1InputNeverWritesOrReservesWaiter(t *testing.T) {
 
 func TestExplicitZeroInputsRemainValid(t *testing.T) {
 	for _, tc := range []struct{ action, args string }{
-		{actionBuzzer, `{"freq":0,"duration":0}`}, {actionMotor, `{"steps":0}`}, {actionLED, `{"pattern":0}`},
+		{actionBuzzer, `{"freq":1,"duration":0}`}, {actionMotor, `{"steps":0}`}, {actionLED, `{"pattern":0}`},
 	} {
 		if _, err := encodeCommand(tc.action, tc.args); err != nil {
 			t.Fatal(err)

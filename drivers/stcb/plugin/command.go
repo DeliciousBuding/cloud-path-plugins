@@ -141,11 +141,11 @@ func encodeBuzzer(args string) ([]byte, error) {
 	if err := json.Unmarshal([]byte(args), &a); err != nil {
 		return nil, fmt.Errorf("stcb: buzzer args 须为 JSON 对象（freq/duration）: %w", err)
 	}
-	if a.Freq < 0 || a.Freq > 9 {
-		return nil, fmt.Errorf("stcb: buzzer freq 档须为 0-9，got %d", a.Freq)
+	if a.Freq < 1 || a.Freq > 8 {
+		return nil, fmt.Errorf("stcb: buzzer freq 档须为 1-8，got %d", a.Freq)
 	}
-	if a.Duration < 0 || a.Duration > 9 {
-		return nil, fmt.Errorf("stcb: buzzer duration 档须为 0-9，got %d", a.Duration)
+	if a.Duration < 0 || a.Duration > 8 {
+		return nil, fmt.Errorf("stcb: buzzer duration 档须为 0-8，got %d", a.Duration)
 	}
 	return []byte{'B', byte('0' + a.Freq), byte('0' + a.Duration)}, nil
 }

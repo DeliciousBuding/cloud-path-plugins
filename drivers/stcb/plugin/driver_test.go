@@ -35,8 +35,10 @@ func TestEncodeCommand(t *testing.T) {
 }
 
 func TestEncodeCommandInvalid(t *testing.T) {
-	if _, err := encodeCommand("buzzer", `{"freq":10,"duration":0}`); err == nil {
-		t.Fatal("expected reject freq 10")
+	for _, args := range []string{`{"freq":0,"duration":0}`, `{"freq":9,"duration":0}`, `{"freq":10,"duration":0}`, `{"freq":1,"duration":9}`} {
+		if _, err := encodeCommand("buzzer", args); err == nil {
+			t.Fatalf("expected reject out-of-range buzzer args %s", args)
+		}
 	}
 	if _, err := encodeCommand("display", `{"digits":[1,2]}`); err == nil {
 		t.Fatal("expected reject short digits")
@@ -56,6 +58,23 @@ func TestEncodeCommandInvalid(t *testing.T) {
 		if _, err := encodeCommand(business, ""); err == nil {
 			t.Fatalf("expected business action %q to be rejected", business)
 		}
+	}
+}
+
+func TestBuzzerContractMatchesFirmwareRange(t *testing.T) {
+	for _, args := range []string{`{"freq":1,"duration":0}`, `{"freq":8,"duration":8}`} {
+		if _, err := encodeCommand(actionBuzzer, args); err != nil {
+			t.Fatalf("legacy rejected valid buzzer args %s: %v", args, err)
+		}
+		if _, err := encodeV1Command("guard-1", actionBuzzer, args); err != nil {
+			t.Fatalf("v1 rejected valid buzzer args %s: %v", args, err)
+		}
+	}
+	properties := buzzerActionSchema["properties"].(map[string]any)
+	freq := properties["freq"].(map[string]any)
+	duration := properties["duration"].(map[string]any)
+	if freq["minimum"] != 1 || freq["maximum"] != 8 || duration["minimum"] != 0 || duration["maximum"] != 8 {
+		t.Fatalf("buzzer schema drift: freq=%#v duration=%#v", freq, duration)
 	}
 }
 
