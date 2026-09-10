@@ -68,6 +68,10 @@ type instanceState struct {
 
 	armed bool
 	state string
+	// armRecordPending records that auto-arm set the armed state while no
+	// effect stream was attached yet, so the arm domain record still has to be
+	// flushed on the first event.
+	armRecordPending bool
 
 	sensors       map[string]*sensorState
 	active        map[string]activeAlert

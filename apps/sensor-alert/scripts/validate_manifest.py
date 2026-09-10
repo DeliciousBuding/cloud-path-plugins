@@ -28,7 +28,7 @@ REQUIREMENTS = [
 UI = {
     "apiVersion": 1,
     "navigation": {
-        "title": "传感器告警",
+        "title": "环境告警",
         "icon": "bell-ring",
         "order": 40,
         "route": "sensor-alert",
@@ -37,8 +37,8 @@ UI = {
     "pages": [
         {
             "id": "home",
-            "title": "传感器告警",
-            "description": "监测温度、光照、接触和振动，达到设定条件时发出声光提醒，并记录每次告警。",
+            "title": "环境与安防告警",
+            "description": "监测温度、光照、接触和振动，达到设定条件时发出声光提醒，并记录最近一次告警。",
             "sections": [
                 {
                     "type": "status",
@@ -51,7 +51,7 @@ UI = {
                     "type": "metrics",
                     "title": "当前告警",
                     "description": "显示最近一次告警的状态、传感器、当前值和触发时间。",
-                    "emptyText": "还没有告警记录。",
+                    "emptyText": "还没有告警。若尚未布防，请先在「告警开关」中布防。",
                     "source": "records",
                     "recordType": "alert",
                     "fields": [
@@ -94,15 +94,15 @@ UI = {
                 {
                     "type": "actions",
                     "title": "告警开关",
-                    "description": "点击“布防告警”启用告警，点击“撤防告警”停用告警。",
+                    "description": "配置默认会自动布防；也可手动点击“布防告警”启用，或点击“撤防告警”停用。",
                     "emptyText": "暂无可执行的告警操作。",
                     "source": "manual-jobs"
                 },
                 {
                     "type": "records",
-                    "title": "告警记录",
-                    "description": "查看每次告警发生在哪个传感器、当时是什么状态、数值和触发阈值。",
-                    "emptyText": "还没有告警记录。",
+                    "title": "最近告警",
+                    "description": "查看最近一次告警发生在哪个传感器、当时是什么状态、数值和触发阈值。",
+                    "emptyText": "还没有告警。若尚未布防，请先点击“布防告警”开始监测；已布防但还没有触发时会显示在这里。",
                     "source": "records",
                     "recordType": "alert",
                     "presentation": "timeline",
@@ -157,30 +157,37 @@ UI = {
                     "source": "config",
                     "fields": [
                         {
+                            "key": "app_config.auto_arm",
+                            "label": "自动布防",
+                            "type": "boolean",
+                            "description": "打开后，配置生效（含插件重启后）会自动布防并开始监测；关闭后需要手动点击“布防告警”。",
+                            "default": True
+                        },
+                        {
                             "key": "app_config.temperature_min",
-                            "label": "最低温度（℃）",
+                            "label": "最低温度（传感器单位）",
                             "type": "number",
-                            "description": "低于这个温度时触发告警。",
+                            "description": "低于这个温度时触发告警；按传感器原始单位比较，不做单位换算。",
                             "default": 18
                         },
                         {
                             "key": "app_config.temperature_max",
-                            "label": "最高温度（℃）",
+                            "label": "最高温度（传感器单位）",
                             "type": "number",
-                            "description": "高于这个温度时触发告警。",
+                            "description": "高于这个温度时触发告警；按传感器原始单位比较，不做单位换算。",
                             "default": 28
                         },
                         {
                             "key": "app_config.light_min",
-                            "label": "最低光照",
+                            "label": "最低光照（原始读数）",
                             "type": "number",
-                            "description": "低于这个数值时触发告警；留空表示不检查。"
+                            "description": "低于这个数值时触发告警；数值为传感器原始读数（未标定），留空表示不检查。"
                         },
                         {
                             "key": "app_config.light_max",
-                            "label": "最高光照",
+                            "label": "最高光照（原始读数）",
                             "type": "number",
-                            "description": "高于这个数值时触发告警；留空表示不检查。"
+                            "description": "高于这个数值时触发告警；数值为传感器原始读数（未标定），留空表示不检查。"
                         },
                         {
                             "key": "app_config.contact_enabled",
@@ -247,7 +254,7 @@ def validate(value):
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
         "kind": "Application",
         "id": PLUGIN_ID,
-        "version": "0.1.7",
+        "version": "0.2.0",
         "protocol": 1,
         "entrypoint": ENTRYPOINT,
         "compatibility": {"core": ">=0.2.29 <0.3.0"},

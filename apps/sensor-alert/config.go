@@ -28,6 +28,7 @@ type Config struct {
 	LightMax         *float64    `json:"light_max"`
 	ContactEnabled   bool        `json:"contact_enabled"`
 	VibrationEnabled bool        `json:"vibration_enabled"`
+	AutoArm          bool        `json:"auto_arm"`
 	CooldownS        int         `json:"cooldown_s"`
 	Silent           bool        `json:"silent"`
 	AlertLEDMask     int         `json:"alert_led_mask"`
@@ -38,6 +39,7 @@ func DefaultConfig() Config {
 	return Config{
 		TemperatureMin: 18,
 		TemperatureMax: 28,
+		AutoArm:        true,
 		CooldownS:      60,
 		AlertLEDMask:   255,
 		AlertTone:      &ToneConfig{FrequencyHz: 1000, DurationMs: 200},
@@ -187,6 +189,7 @@ func (c Config) sameAs(other Config) bool {
 		sameFloat(c.LightMin, other.LightMin) && sameFloat(c.LightMax, other.LightMax) &&
 		c.ContactEnabled == other.ContactEnabled &&
 		c.VibrationEnabled == other.VibrationEnabled &&
+		c.AutoArm == other.AutoArm &&
 		c.CooldownS == other.CooldownS && c.Silent == other.Silent &&
 		c.AlertLEDMask == other.AlertLEDMask &&
 		((c.AlertTone == nil && other.AlertTone == nil) ||

@@ -22,7 +22,7 @@ import (
 
 const (
 	pluginID      = "io.github.deliciousbuding.cloud-path-app-sensor-alert"
-	pluginVersion = "0.1.7"
+	pluginVersion = "0.2.0"
 
 	jobArm            = "arm"
 	jobDisarm         = "disarm"
@@ -136,7 +136,7 @@ func (s *Service) lookup(id string, create bool) (*instanceState, error) {
 	return st, nil
 }
 
-func (s *Service) ConfigureInstance(_ context.Context, req *application.ConfigureInstanceRequest) (*application.ConfigureInstanceResponse, error) {
+func (s *Service) ConfigureInstance(ctx context.Context, req *application.ConfigureInstanceRequest) (*application.ConfigureInstanceResponse, error) {
 	if req == nil {
 		return nil, status.Errorf(status.CodeInvalidArgument, "nil configure request")
 	}
@@ -187,17 +187,48 @@ func (s *Service) ConfigureInstance(_ context.Context, req *application.Configur
 		st.lastCommand = nil
 		st.jobResults = map[string]string{}
 		st.jobOrder = nil
-		if st.armed {
+		switch {
+		case st.armed:
 			if len(st.active) == 0 {
 				st.state = stateArmed
 				st.alert = AlertRecord{State: stateArmed, Severity: "info", Summary: "sensor alert armed"}
 			}
-		} else {
+		case cfg.AutoArm:
+			// Auto-arm makes "running" mean "monitoring". The arm record is
+			// flushed immediately when an effect stream is already attached,
+			// otherwise on the first event of this instance.
+			st.armed = true
+			st.state = stateArmed
+			st.alert = AlertRecord{State: stateArmed, Severity: "info", Summary: "sensor alert armed"}
+			st.armRecordPending = true
+		default:
 			st.state = stateDisarmed
 			st.alert = AlertRecord{State: stateDisarmed, Severity: "info", Summary: "sensor alert disarmed"}
+			st.armRecordPending = false
+		}
+		if err := s.flushAlertRecordLocked(ctx, st); err != nil {
+			return &application.ConfigureInstanceResponse{
+				PluginInstanceID: req.PluginInstanceID,
+				AppliedRevision:  st.configRev,
+				Status:           status.Errorf(status.CodeUnavailable, "%v", err),
+			}, nil
 		}
 	}
 	return &application.ConfigureInstanceResponse{PluginInstanceID: req.PluginInstanceID, AppliedRevision: st.configRev, Status: status.New()}, nil
+}
+
+// flushAlertRecordLocked emits the arm domain record once an effect stream is
+// attached. Auto-arm happens during ConfigureInstance, which may run before the
+// event stream exists, so the record is deferred until the first event.
+func (s *Service) flushAlertRecordLocked(ctx context.Context, st *instanceState) error {
+	if !st.armRecordPending || st.route == nil {
+		return nil
+	}
+	if err := s.emitAlertLocked(ctx, st); err != nil {
+		return err
+	}
+	st.armRecordPending = false
+	return nil
 }
 
 func validateBindings(bindings []application.Binding) (map[string]string, []application.BindingIssue) {
@@ -341,6 +372,9 @@ func (s *Service) handleEvent(ctx context.Context, ev *application.ApplicationEv
 	s.mu.Unlock()
 	if route != nil {
 		st.route = route.writer
+	}
+	if err := s.flushAlertRecordLocked(ctx, st); err != nil {
+		return err
 	}
 	switch u := ev.Union.(type) {
 	case *application.CapabilityEvent:
@@ -675,6 +709,7 @@ func (s *Service) transitionLocked(ctx context.Context, st *instanceState, armed
 		if err := s.emitAlertLocked(ctx, st); err != nil {
 			return false, err
 		}
+		st.armRecordPending = false
 		return true, nil
 	}
 	st.state = stateDisarmed
@@ -682,6 +717,7 @@ func (s *Service) transitionLocked(ctx context.Context, st *instanceState, armed
 	if err := s.emitAlertLocked(ctx, st); err != nil {
 		return false, err
 	}
+	st.armRecordPending = false
 	if err := s.emitLightLocked(ctx, st, 0, "disarm"); err != nil {
 		return false, err
 	}

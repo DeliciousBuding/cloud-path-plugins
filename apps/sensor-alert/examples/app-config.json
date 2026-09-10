@@ -5,6 +5,7 @@
   "light_max": null,
   "contact_enabled": false,
   "vibration_enabled": false,
+  "auto_arm": true,
   "cooldown_s": 60,
   "silent": false,
   "alert_led_mask": 255,

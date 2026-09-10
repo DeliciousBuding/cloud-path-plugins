@@ -2,22 +2,25 @@
 
 `io.github.deliciousbuding.cloud-path-app-sensor-alert` 是一个设备无关的 CloudPath Application Plugin。它只消费绑定实体的观测和 CapabilityEvent，再通过领域记录与通用 `tone` / `led` 命令表达告警动作，不打开串口、不访问网络、不烧录固件。
 
-版本：`0.1.7`
+版本：`0.2.0`
 Application Protocol：`1`
 最低 Core：`0.2.15`
 
 ## Web UI 贡献
 
-Manifest 声明 `ui.apiVersion: 1`，安装实例后注册导航“传感器告警”和独立路由 `/apps/sensor-alert`。停用后入口仍保留，页面会明确显示当前未启用。首页由 Core 白名单 section 渲染：实例状态、来自 `alert` 记录的最新指标、布防/撤防/状态手动操作、`alert` 时间线和配置表单。表单覆盖阈值、静默、冷却和 LED 掩码；`alert_tone` 复杂对象仍保留在高级参数。
+Manifest 声明 `ui.apiVersion: 1`，安装实例后注册导航“环境告警”（应用名“环境与安防告警”）和独立路由 `/apps/sensor-alert`（route slug 保持稳定，不随显示名变化）。停用后入口仍保留，页面会明确显示当前未启用。首页由 Core 白名单 section 渲染：实例状态、来自 `alert` 记录的最新指标、布防/撤防/状态手动操作、`alert` 最近告警视图和配置表单。表单覆盖自动布防、阈值、静默、冷却和 LED 掩码；`alert_tone` 复杂对象仍保留在高级参数。
 
-## 与 Environment Guard 的边界
+## 唯一的环境/安防监测应用
 
-| 插件 | 职责 |
+退役的 `cloud-path-app-environment-guard` 只读监测能力（temperature / illuminance）是本插件的子集，已不再是系统中的应用。本插件是系统里唯一的环境/安防监测应用，统一承载监测与告警：
+
+| 能力 | 归属 |
 |---|---|
-| `cloud-path-app-environment-guard` | 只读监测环境观测，维护环境状态与阈值变化记录；不发设备动作。 |
-| `cloud-path-app-sensor-alert` | 在监测结果之上维护布防/告警状态机，并发出 sound/light 告警动作。 |
+| temperature / illuminance 监测与阈值告警 | `cloud-path-app-sensor-alert` |
+| contact / vibration 安防事件 | `cloud-path-app-sensor-alert` |
+| buzzer / led 声光提醒 | `cloud-path-app-sensor-alert` |
 
-本插件不实现环境历史、曲线或设备采样；这些仍属于 Driver / Environment Guard / Core 的职责。它也不了解 STC-B、COM 口、串口帧或具体厂商字段。
+本插件不实现环境历史、曲线或设备采样；这些仍属于 Driver / Core 的职责。它也不了解 STC-B、COM 口、串口帧或具体厂商字段。
 
 ## Requirements
 
@@ -38,12 +41,13 @@ Manifest 声明 `ui.apiVersion: 1`，安装实例后注册导航“传感器告�
 
 | 字段 | 类型 | 默认值 | 说明 |
 |---|---|---:|---|
-| `temperature_min` | number | `18` | 温度下限，必须小于上限。 |
-| `temperature_max` | number | `28` | 温度上限。 |
-| `light_min` | number / null | `null` | 光照下限；null 表示不评估该侧。 |
-| `light_max` | number / null | `null` | 光照上限；null 表示不评估该侧。 |
+| `temperature_min` | number | `18` | 温度下限；按传感器原始单位比较，不做单位换算；必须小于上限。 |
+| `temperature_max` | number | `28` | 温度上限；按传感器原始单位比较，不做单位换算。 |
+| `light_min` | number / null | `null` | 光照下限（传感器原始读数，未标定）；null 表示不评估该侧。 |
+| `light_max` | number / null | `null` | 光照上限（传感器原始读数，未标定）；null 表示不评估该侧。 |
 | `contact_enabled` | boolean | `false` | 启用 hall 接触告警。 |
 | `vibration_enabled` | boolean | `false` | 启用振动告警。 |
+| `auto_arm` | boolean | `true` | true 时配置生效（含插件重启后重新 configure）自动布防并开始监测；false 时保持初始 `disarmed`，需手动布防。 |
 | `cooldown_s` | integer | `60` | 同一条件的重复触发冷却时间，范围 `0..86400`。 |
 | `silent` | boolean | `false` | true 时仍记录和控灯，但不发 `tone`。 |
 | `alert_led_mask` | integer | `255` | 触发时发给 LED 的 `mask`，范围 `0..255`。 |
@@ -65,7 +69,7 @@ Manifest 声明 `ui.apiVersion: 1`，安装实例后注册导航“传感器告�
 | `status` | manual-only | 返回当前配置、绑定、告警记录、待完成命令和最近命令结果。 |
 | `check-freshness` | 自动 job | 只读返回绑定传感器的新鲜度报告，不采样、不触发告警。 |
 
-所有 job 的 `args_json` 必须是空对象 `{}`。`arm` / `disarm` 支持 job idempotency key；同一 key 重放返回同一结果。`check-freshness` 使用插件内部 120 秒窗口，仅用于诊断，不改变告警状态。
+所有 job 的 `args_json` 必须是空对象 `{}`。`arm` / `disarm` 支持 job idempotency key；同一 key 重放返回同一结果。`arm` / `disarm` / `status` 的 ResultJSON 顶层包含 `state`（`armed` / `disarmed`）与 `armed` 布尔值，由控制台按 `state` 本地化为中/英文案；**插件不返回语言相关的散文**，否则英文界面会出现中文。`check-freshness` 使用插件内部 120 秒窗口，仅用于诊断，不改变告警状态。
 
 ## 告警状态机
 
@@ -77,7 +81,8 @@ recovered --threshold/event--> triggered
 armed/triggered/recovered --disarm--> disarmed
 ```
 
-- 初始状态为 `disarmed`，不会在未布防时触发动作。
+- `auto_arm` 默认 `true`：配置生效后若当前未布防，会自动进入 `armed` 并开始监测；`auto_arm=false` 时初始状态为 `disarmed`，需手动布防。未布防时不会触发动作。
+- 同一 revision/内容的重复 configure 会被整体跳过，不会重复写布防记录；已布防时的配置变更也不会重复发布防记录。若要在配置变更后保持撤防，请设 `auto_arm=false` 并在需要时手动 `disarm`。
 - 阈值、hall、vibration 都进入同一实例的 `triggered` 状态。
 - 同一条件在 `cooldown_s` 内只触发一次；不同条件可以独立触发。
 - `silent=true` 只抑制 sound，不影响领域记录和 light。
@@ -87,7 +92,7 @@ armed/triggered/recovered --disarm--> disarmed
 
 ### alert domain record
 
-每个实例维护一条 `record_type=alert`、`record_id=current` 的当前/最近告警记录：
+每个实例只维护一条 `record_type=alert`、`record_id=current` 的最近告警记录；页面「最近告警」section 展示的就是这条记录（不存在“每次告警一条”的多条历史）：
 
 ```json
 {
@@ -167,7 +172,7 @@ python scripts/e2e_sensor_alert.py --execute --sensor contact --recovery-mode di
 ## 限制
 
 - 本仓只实现 Application 层，不修改 Core、Driver 或其他 Application。
-- 不持久化进程内状态；插件重启后需要重新 configure/bind/arm，Core 的 desired state 与记录仍由平台管理。
+- 不持久化进程内状态；插件重启后需要重新 configure/bind，`auto_arm=true` 时配置生效会自动重新布防（`auto_arm=false` 时需手动 `arm`）。Core 的 desired state 与记录仍由平台管理。
 - `check-freshness` 只报告新鲜度，不把 stale 自动转成告警，避免在没有配置 stale 阈值时发明业务语义。
 - 命令发送成功不等于设备执行成功；只有匹配的 `RequestCompleted` 才会更新最近命令结果。
 - 真实硬件 E2E 需手动运行 `scripts/e2e_sensor_alert.py`；当前真板脚本是 LED-only，不验证发声路径。软件-only 验证不依赖 COM3、Edge、真实板或烧录。Driver `tone` 支持和跨租户生产验证仍需单独的真实链路证据；在明确批准前不得用真板 E2E 发 `tone`/`buzzer`。

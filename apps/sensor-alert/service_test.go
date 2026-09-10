@@ -73,6 +73,9 @@ type harness struct {
 
 func newHarness(t *testing.T, cfg Config, bindings []application.Binding) *harness {
 	t.Helper()
+	// These tests exercise the manual arm/disarm state machine, so they start
+	// from the explicit opt-out. Auto-arm is covered by the TestAutoArm* tests.
+	cfg.AutoArm = false
 	svc := New()
 	h := &harness{svc: svc, now: time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)}
 	svc.now = func() time.Time { return h.now }
@@ -329,7 +332,9 @@ func TestRequestCompletedAndCrossInstanceIsolation(t *testing.T) {
 	}
 	st.mu.Unlock()
 
-	// A second instance keeps independent state and route.
+	// A second instance keeps independent state and route. Explicitly opt out
+	// of auto-arm so this stays a disarmed baseline instance.
+	cfg.AutoArm = false
 	raw, _ := json.Marshal(cfg)
 	_, err := h.svc.ConfigureInstance(context.Background(), &application.ConfigureInstanceRequest{PluginInstanceID: "instance-b", Config: raw, ConfigRevision: 1})
 	if err != nil {

@@ -7,22 +7,27 @@
     "temperature_min": {
       "type": "number",
       "default": 18,
-      "description": "温度下限；低于该值触发 temperature-low。"
+      "description": "温度下限；低于该值触发 temperature-low。数值使用传感器原始单位，不做换算。"
     },
     "temperature_max": {
       "type": "number",
       "default": 28,
-      "description": "温度上限；高于该值触发 temperature-high。"
+      "description": "温度上限；高于该值触发 temperature-high。数值使用传感器原始单位，不做换算。"
     },
     "light_min": {
       "type": ["number", "null"],
       "default": null,
-      "description": "光照下限；null 表示不评估光照下限。"
+      "description": "光照下限；低于该值触发 illuminance-low。数值为传感器原始读数（未标定）；null 表示不评估光照下限。"
     },
     "light_max": {
       "type": ["number", "null"],
       "default": null,
-      "description": "光照上限；null 表示不评估光照上限。"
+      "description": "光照上限；高于该值触发 illuminance-high。数值为传感器原始读数（未标定）；null 表示不评估光照上限。"
+    },
+    "auto_arm": {
+      "type": "boolean",
+      "default": true,
+      "description": "配置生效时自动布防并开始监测；false 时保持 disarmed，需手动布防。"
     },
     "contact_enabled": {
       "type": "boolean",
