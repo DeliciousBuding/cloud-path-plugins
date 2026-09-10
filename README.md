@@ -5,6 +5,8 @@
 
 CloudPath 官方 Driver 与 Application 插件源码单仓。每个插件仍保留独立模块、Manifest、版本号和 Release 资产；根目录 `plugins.yaml` 是 monorepo 的插件目录与发现索引。
 
+> 迁移说明：本仓是官方插件的 canonical source。旧的 `cloud-path-driver-stcb` 与 `cloud-path-app-*` 独立仓迁入本仓后转为 archived，只保留历史 tag/Release；现役开发、Issue、catalog 和发布都以本仓为准。
+
 ## 现役插件
 
 | Slug | 类型 | 版本 | 源码 | Release tag |

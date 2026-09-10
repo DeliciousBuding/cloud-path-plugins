@@ -5,6 +5,12 @@ Driver and Application plugins. Each plugin keeps its own Go module, manifest,
 semantic version, and GitHub Release; `plugins.yaml` is the monorepo discovery
 catalog.
 
+> Migration note: this repository is the canonical source for official
+> plugins. The legacy `cloud-path-driver-stcb` and `cloud-path-app-*`
+> repositories are archived after migration and retain historical tags and
+> releases only; active development, issues, catalog discovery, and releases
+> live here.
+
 ## Active plugins
 
 | Slug | Kind | Version | Source |
