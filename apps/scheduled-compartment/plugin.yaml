@@ -1,0 +1,385 @@
+apiVersion: plugins.cloudpath.dev/v1alpha1
+kind: Application
+id: io.github.deliciousbuding.cloud-path-app-scheduled-compartment
+version: 0.3.2
+license: Apache-2.0
+protocol: 1
+# Executable entrypoint. The Application Protocol v1 service is implemented in
+# cmd/cloud-path-app-scheduled-compartment and served over the host transport.
+entrypoint: cloud-path-app-scheduled-compartment
+compatibility:
+  # Core compatibility range. The registry installer fails closed without it
+  # (ERR_CORE_INCOMPATIBLE), so a published manifest must always declare it.
+  core: ">=0.2.29 <0.3.0"
+requirements:
+  - id: reminder-output
+    capability: cloudpath.dev/capability/buzzer@1
+    cardinality: zero-or-one
+  - id: compartments
+    capability: cloudpath.dev/capability/key@1
+    cardinality: one-or-more
+    minItems: 1
+  - id: local-display
+    capability: cloudpath.dev/capability/display-text@1
+    cardinality: zero-or-one
+contributes:
+  # The application id is the stable, semantic contribution id; it is distinct
+  # from the plugin id at the top of this file.
+  applications:
+    - id: scheduled-compartment
+      title: 取药提醒
+      ui:
+        apiVersion: 1
+        navigation:
+          title: 药盒提醒
+          icon: pill
+          order: 30
+          route: pillbox
+          visibility: instance-enabled
+          i18n:
+            zh-CN: 药盒提醒
+            en-US: Pillbox reminders
+        pages:
+          - id: home
+            title: 药盒提醒
+            description: 按每天设定的时间提醒取药，并记录是否按时确认。
+            sections:
+              - type: status
+                source: instance
+                title: 运行状态
+                description: 查看取药提醒是否正常运行。
+                i18n:
+                  zh-CN: 运行状态
+                  en-US: Status
+                  zh-CN.description: 查看取药提醒是否正常运行。
+                  en-US.description: Check whether medication reminders are running normally.
+              - type: metrics
+                source: records
+                recordType: window
+                title: 最近一次提醒
+                description: 查看最近一次取药提醒的状态和时间。
+                emptyText: 还没有取药提醒记录。
+                fields:
+                  - key: state
+                    label: 当前状态
+                    values:
+                      opened: 待确认取药
+                      completed: 已确认取药
+                      missed: 已错过
+                      completed_late: 迟到确认取药
+                    i18n:
+                      zh-CN: 当前状态
+                      en-US: Current status
+                    valuesI18n:
+                      opened:
+                        zh-CN: 待确认取药
+                        en-US: Awaiting medication confirmation
+                      completed:
+                        zh-CN: 已确认取药
+                        en-US: Medication confirmed
+                      missed:
+                        zh-CN: 已错过
+                        en-US: Missed
+                      completed_late:
+                        zh-CN: 迟到确认取药
+                        en-US: Late medication confirmation
+                  - key: compartment_name
+                    label: 药格
+                    hideWhenEmpty: true
+                    i18n:
+                      zh-CN: 药格
+                      en-US: Compartment
+                  - key: start
+                    label: 提醒时间
+                    format: time
+                    hideWhenEmpty: true
+                    i18n:
+                      zh-CN: 提醒时间
+                      en-US: Reminder time
+                  - key: confirmed_at
+                    label: 确认时间
+                    format: time
+                    hideWhenEmpty: true
+                    i18n:
+                      zh-CN: 确认时间
+                      en-US: Confirmation time
+                i18n:
+                  zh-CN: 最近一次提醒
+                  en-US: Latest reminder
+                  zh-CN.description: 查看最近一次取药提醒的状态和时间。
+                  en-US.description: View the status and time of the latest medication reminder.
+                  zh-CN.emptyText: 还没有取药提醒记录。
+                  en-US.emptyText: No medication reminder records yet.
+              - type: actions
+                source: manual-jobs
+                title: 临时操作
+                description: 可以临时开始一次提醒，或补记某次取药已经确认。
+                i18n:
+                  zh-CN: 临时操作
+                  en-US: Temporary actions
+                  zh-CN.description: 可以临时开始一次提醒，或补记某次取药已经确认。
+                  en-US.description: Start a reminder temporarily or record a medication confirmation after the fact.
+              - type: records
+                source: records
+                recordType: window
+                presentation: timeline
+                title: 提醒记录
+                description: 查看每次提醒的状态、药格和时间。
+                emptyText: 还没有取药提醒记录。
+                fields:
+                  - key: title
+                    label: 提醒
+                    i18n:
+                      zh-CN: 提醒
+                      en-US: Reminder
+                  - key: id
+                    label: 记录编号 / 窗口编号
+                    i18n:
+                      zh-CN: 记录编号 / 窗口编号
+                      en-US: Record ID / window ID
+                      zh-CN.description: 确认窗口时复制这里的编号；通常直接按盒子上的确认按键即可。
+                      en-US.description: Copy this ID to confirm a window from the dashboard; usually you can just press the button on the box.
+                  - key: state
+                    label: 状态
+                    values:
+                      opened: 待确认取药
+                      completed: 已确认取药
+                      missed: 已错过
+                      completed_late: 迟到确认取药
+                    i18n:
+                      zh-CN: 状态
+                      en-US: Status
+                    valuesI18n:
+                      opened:
+                        zh-CN: 待确认取药
+                        en-US: Awaiting medication confirmation
+                      completed:
+                        zh-CN: 已确认取药
+                        en-US: Medication confirmed
+                      missed:
+                        zh-CN: 已错过
+                        en-US: Missed
+                      completed_late:
+                        zh-CN: 迟到确认取药
+                        en-US: Late medication confirmation
+                  - key: compartment_name
+                    label: 药格
+                    hideWhenEmpty: true
+                    i18n:
+                      zh-CN: 药格
+                      en-US: Compartment
+                  - key: start
+                    label: 提醒时间
+                    format: time
+                    hideWhenEmpty: true
+                    i18n:
+                      zh-CN: 提醒时间
+                      en-US: Reminder time
+                  - key: missed_at
+                    label: 错过时间
+                    format: time
+                    hideWhenEmpty: true
+                    i18n:
+                      zh-CN: 错过时间
+                      en-US: Missed at
+                i18n:
+                  zh-CN: 提醒记录
+                  en-US: Reminder records
+                  zh-CN.description: 查看每次提醒的状态、药格和时间。
+                  en-US.description: View the status, compartment, and time of each reminder.
+                  zh-CN.emptyText: 还没有取药提醒记录。
+                  en-US.emptyText: No medication reminder records yet.
+              - type: metrics
+                source: records
+                recordType: display
+                title: 屏幕提示状态
+                description: 只读查看本地显示或数码管现在提示什么；配置并绑定本地显示后，窗口状态变化时产生记录。数码管数字码 1/2 的含义见 README。
+                emptyText: 尚未产生显示状态记录（未配置或未绑定本地显示）。
+                fields:
+                  - key: desired_state
+                    label: 提示状态
+                    values:
+                      reminder: 提醒中（待确认）
+                      missed: 已超时未确认
+                      idle: 显示时钟
+                    i18n:
+                      zh-CN: 提示状态
+                      en-US: Displayed state
+                    valuesI18n:
+                      reminder:
+                        zh-CN: 提醒中（待确认）
+                        en-US: Reminder (awaiting confirmation)
+                      missed:
+                        zh-CN: 已超时未确认
+                        en-US: Expired, not confirmed
+                      idle:
+                        zh-CN: 显示时钟
+                        en-US: Clock
+                  - key: summary
+                    label: 说明
+                    i18n:
+                      zh-CN: 说明
+                      en-US: Details
+                i18n:
+                  zh-CN: 屏幕提示状态
+                  en-US: Display status
+                  zh-CN.description: 只读查看本地显示或数码管现在提示什么；配置并绑定本地显示后，窗口状态变化时产生记录。数码管数字码 1/2 的含义见 README。
+                  en-US.description: Read-only view of the local display or digit codes. A record appears only after a display policy and binding are configured and a window state changes. Digit codes 1/2 are documented in the README.
+                  zh-CN.emptyText: 尚未产生显示状态记录（未配置或未绑定本地显示）。
+                  en-US.emptyText: No display status record yet (no local display configured or bound).
+              - type: schedule
+                source: jobs
+                title: 窗口检查任务
+                description: 查看当前正在运行的到期检查任务：提醒窗口开启期间每分钟执行一次，确认或超时后自动取消。它由每个窗口动态创建，不是每天 08:00 这类日程；每日提醒时间请看下方「提醒设置」。
+                emptyText: 当前没有正在运行的检查任务。
+                i18n:
+                  zh-CN: 窗口检查任务
+                  en-US: Window check tasks
+                  zh-CN.description: 查看当前正在运行的到期检查任务：提醒窗口开启期间每分钟执行一次，确认或超时后自动取消。它由每个窗口动态创建，不是每天 08:00 这类日程；每日提醒时间请看下方「提醒设置」。
+                  en-US.description: Shows the expiry check task that runs once a minute while a reminder window is open and is cancelled after confirmation or expiry. It is created per window, not the daily 08:00 schedule; configure daily times in Reminder settings below.
+                  zh-CN.emptyText: 当前没有正在运行的检查任务。
+                  en-US.emptyText: No window check task is currently running.
+              - type: form
+                source: config
+                title: 提醒设置
+                description: 配置药格、每日提醒计划、时区和提醒声音。
+                fields:
+                  - key: app_config.compartments
+                    label: 药格列表
+                    type: array
+                    description: 至少配置一个药格；数组顺序就是按键映射顺序。
+                    required: true
+                    minItems: 1
+                    itemFields:
+                      - key: id
+                        label: 药格 ID
+                        type: string
+                        description: 稳定标识，供 schedule[].compartment 引用；同一实例内必须唯一，建议使用 medicine 这类英文标识。
+                        placeholder: medicine
+                        required: true
+                        i18n:
+                          zh-CN: 药格 ID
+                          en-US: Compartment ID
+                          zh-CN.description: 稳定标识，供 schedule[].compartment 引用；同一实例内必须唯一，建议使用 medicine 这类英文标识。
+                          en-US.description: Stable ID referenced by schedule[].compartment; it must be unique within the instance. Use an English ID such as medicine.
+                      - key: name
+                        label: 显示名称
+                        type: string
+                        description: 可留空；用于页面和提醒文案。
+                        placeholder: 取药
+                        i18n:
+                          zh-CN: 显示名称
+                          en-US: Display name
+                          zh-CN.description: 可留空；用于页面和提醒文案。
+                          en-US.description: Can be left blank; used in the page and reminder text.
+                    i18n:
+                      zh-CN: 药格列表
+                      en-US: Compartment list
+                      zh-CN.description: 至少配置一个药格；数组顺序就是按键映射顺序。
+                      en-US.description: Configure at least one compartment; the array order is the button mapping order.
+                  - key: app_config.schedule
+                    label: 每日提醒计划
+                    type: array
+                    description: 至少添加一个窗口；开始和结束时间使用 24 小时制 HH:MM，按上方时区解释。
+                    required: true
+                    minItems: 1
+                    itemFields:
+                      - key: id
+                        label: 计划 ID
+                        type: string
+                        description: 每个窗口的唯一标识，例如 morning。
+                        placeholder: morning
+                        required: true
+                        i18n:
+                          zh-CN: 计划 ID
+                          en-US: Schedule ID
+                          zh-CN.description: 每个窗口的唯一标识，例如 morning。
+                          en-US.description: Unique ID for each window, for example morning.
+                      - key: compartment
+                        label: 药格 ID
+                        type: string
+                        description: 必须引用上方 compartments[].id 中已配置的值，例如 medicine。
+                        placeholder: medicine
+                        required: true
+                        i18n:
+                          zh-CN: 药格 ID
+                          en-US: Compartment ID
+                          zh-CN.description: 必须引用上方 compartments[].id 中已配置的值，例如 medicine。
+                          en-US.description: Must reference a configured value from compartments[].id above, for example medicine.
+                      - key: start
+                        label: 开始时间
+                        type: string
+                        description: 24 小时制 HH:MM，例如 08:00。
+                        placeholder: "08:00"
+                        required: true
+                        pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+                        i18n:
+                          zh-CN: 开始时间
+                          en-US: Start time
+                          zh-CN.description: 24 小时制 HH:MM，例如 08:00。
+                          en-US.description: 24-hour HH:MM, for example 08:00.
+                      - key: end
+                        label: 结束时间
+                        type: string
+                        description: 24 小时制 HH:MM，必须晚于开始时间；不支持跨午夜。
+                        placeholder: "08:30"
+                        required: true
+                        pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+                        i18n:
+                          zh-CN: 结束时间
+                          en-US: End time
+                          zh-CN.description: 24 小时制 HH:MM，必须晚于开始时间；不支持跨午夜。
+                          en-US.description: 24-hour HH:MM; must be later than the start time and cannot cross midnight.
+                    i18n:
+                      zh-CN: 每日提醒计划
+                      en-US: Daily reminder schedule
+                      zh-CN.description: 至少添加一个窗口；开始和结束时间使用 24 小时制 HH:MM，按上方时区解释。
+                      en-US.description: Add at least one window; start and end times use 24-hour HH:MM and are interpreted in the time zone above.
+                  - key: app_config.timezone
+                    label: 时区
+                    type: string
+                    description: 填写所在时区，例如中国内地使用 Asia/Shanghai。
+                    placeholder: Asia/Shanghai
+                    required: true
+                    i18n:
+                      zh-CN: 时区
+                      en-US: Time zone
+                      zh-CN.description: 填写所在时区，例如中国内地使用 Asia/Shanghai。
+                      en-US.description: Enter the local time zone; for mainland China, use Asia/Shanghai.
+                  - key: app_config.reminder.freq
+                    label: 提示音档位
+                    type: integer
+                    description: 0 表示静音；1–9 使用不同的提示音档位。
+                    minimum: 0
+                    maximum: 9
+                    default: 0
+                    i18n:
+                      zh-CN: 提示音档位
+                      en-US: Alert sound level
+                      zh-CN.description: 0 表示静音；1–9 使用不同的提示音档位。
+                      en-US.description: 0 means silent; 1–9 selects different alert sound levels.
+                  - key: app_config.reminder.duration
+                    label: 提示时长档位
+                    type: integer
+                    description: 0 表示不发声；1–9 使用不同的提示时长档位。
+                    minimum: 0
+                    maximum: 9
+                    default: 0
+                    i18n:
+                      zh-CN: 提示时长档位
+                      en-US: Alert duration level
+                      zh-CN.description: 0 表示不发声；1–9 使用不同的提示时长档位。
+                      en-US.description: 0 means silent; 1–9 selects different alert duration levels.
+                i18n:
+                  zh-CN: 提醒设置
+                  en-US: Reminder settings
+                  zh-CN.description: 配置药格、每日提醒计划、时区和提醒声音。
+                  en-US.description: Configure compartments, the daily reminder schedule, time zone, and reminder sound.
+            i18n:
+              zh-CN: 药盒提醒
+              en-US: Pillbox reminders
+              zh-CN.description: 按每天设定的时间提醒取药，并记录是否按时确认。
+              en-US.description: Remind the user to take medication at the configured time each day and record whether it was confirmed on time.
+      i18n:
+        zh-CN: 取药提醒
+        en-US: Medication reminders

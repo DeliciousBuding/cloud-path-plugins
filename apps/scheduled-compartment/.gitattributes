@@ -1,0 +1,9 @@
+# Keep source and machine-readable files stable across Windows checkouts.
+.gitattributes text eol=lf
+* text=auto
+*.go text eol=lf
+*.md text eol=lf
+*.mod text eol=lf
+*.sum text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
