@@ -57,10 +57,7 @@ type device struct {
 
 // openDevice 打开串口并启动 RX 循环。拔线/端口错误通过 done 通知上层。
 func openDevice(ctx context.Context, cfg deviceConfig, onEvent func(entityID, eventType string)) (*device, error) {
-	baud := cfg.Baud
-	if baud <= 0 {
-		baud = 115200 // STC-B Full Firmware v1 / SDK 示例的当前串口契约
-	}
+	baud := effectiveBaud(cfg.Baud) // STC-B Full Firmware v1 / SDK 示例的当前串口契约
 	port, err := serialOpen(cfg.Port, &serial.Mode{BaudRate: baud})
 	if err != nil {
 		return nil, fmt.Errorf("stcb: open %s: %w", cfg.Port, err)
@@ -74,7 +71,7 @@ func openDevice(ctx context.Context, cfg deviceConfig, onEvent func(entityID, ev
 		portName:   cfg.Port,
 		port:       port,
 		onEvent:    onEvent,
-		protocolV1: strings.EqualFold(cfg.Protocol, "v1"),
+		protocolV1: effectiveProtocol(cfg.Protocol) == "v1",
 		waiters:    map[string]chan DeviceAck{},
 		done:       make(chan struct{}),
 	}

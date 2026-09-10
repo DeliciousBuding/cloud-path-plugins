@@ -2,9 +2,11 @@ package plugin
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/driver"
+	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/status"
 )
 
 // 本文件锁定 ConfigureInstance 的**线上形状**与**实例归属**契约。
@@ -89,6 +91,77 @@ func discoverFound(t *testing.T, d *Driver, instanceID string) *driver.Discovery
 	}
 	t.Fatalf("Discover(%s) reported no device", instanceID)
 	return nil
+}
+
+func TestDiscoverReportsOnlyTerminalCountForUsableConfig(t *testing.T) {
+	d := New()
+	configure(t, d, platformInstance, platformShape, 7)
+
+	sink := &discoverySink{}
+	if err := d.Discover(context.Background(), &driver.DiscoverRequest{PluginInstanceID: platformInstance}, sink); err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	found := 0
+	var finished *driver.DiscoveryFinished
+	for _, event := range sink.events {
+		switch body := event.Union.(type) {
+		case *driver.DiscoveryFoundDevice:
+			found++
+		case *driver.DiscoveryFinished:
+			finished = body
+		case *driver.DiscoveryFailed:
+			t.Fatalf("usable config failed discovery: %v", body.Status)
+		}
+	}
+	if found != 1 || finished == nil || finished.FoundCount != 1 {
+		t.Fatalf("found=%d finished=%+v, want exactly one terminal device", found, finished)
+	}
+}
+
+func TestDiscoverFailsClosedForIncompleteConfig(t *testing.T) {
+	cases := []struct {
+		name        string
+		config      string
+		wantMessage string
+	}{
+		{"missing-config", "", "device_id"},
+		{"missing-device-id", `{"port":"COM3"}`, "device_id"},
+		{"missing-port", `{"device_id":"board-1"}`, "port"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := New()
+			if tc.config != "" {
+				configure(t, d, platformInstance, tc.config, 1)
+			}
+			sink := &discoverySink{}
+			if err := d.Discover(context.Background(), &driver.DiscoverRequest{PluginInstanceID: platformInstance}, sink); err != nil {
+				t.Fatalf("Discover transport: %v", err)
+			}
+
+			found := 0
+			failed := 0
+			for _, event := range sink.events {
+				switch body := event.Union.(type) {
+				case *driver.DiscoveryFoundDevice:
+					found++
+				case *driver.DiscoveryFinished:
+					t.Fatalf("incomplete config fabricated Finished(%d)", body.FoundCount)
+				case *driver.DiscoveryFailed:
+					failed++
+					if body.Status == nil || body.Status.Code != status.CodeFailedPrecondition {
+						t.Fatalf("failed status = %+v, want FAILED_PRECONDITION", body.Status)
+					}
+					if !strings.Contains(body.Status.Message, tc.wantMessage) {
+						t.Fatalf("failed message = %q, want substring %q", body.Status.Message, tc.wantMessage)
+					}
+				}
+			}
+			if found != 0 || failed != 1 {
+				t.Fatalf("found=%d failed=%d, want found=0 failed=1", found, failed)
+			}
+		})
+	}
 }
 
 func TestConfigureInstanceAcceptsPlatformStringScalars(t *testing.T) {

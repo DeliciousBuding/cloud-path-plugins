@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/driver"
+	"github.com/DeliciousBuding/cloud-path/sdk/go/cloudpath/v1/status"
 	"go.bug.st/serial"
 )
 
@@ -53,6 +54,66 @@ func TestDeviceIDsForPrefersRequest(t *testing.T) {
 	ids := d.deviceIDsFor("inst", []string{"x", "y"})
 	if len(ids) != 2 || ids[0] != "x" || ids[1] != "y" {
 		t.Fatalf("ids=%v", ids)
+	}
+}
+
+func TestOpenDeviceIsIdempotentOnlyForSameBinding(t *testing.T) {
+	oldOpen := serialOpen
+	defer func() { serialOpen = oldOpen }()
+
+	ports := map[string]*fakePort{"COM3": {}, "COM4": {}}
+	opens := map[string]int{}
+	serialOpen = func(name string, _ *serial.Mode) (serial.Port, error) {
+		opens[name]++
+		return ports[name], nil
+	}
+
+	d := New()
+	configure(t, d, "instance-a", `{"baud":115200,"device_id":"board-1","extra":{"protocol":"v1"},"name":"STC-B #1","port":"COM3"}`, 1)
+	request := func(hints map[string]string) *driver.OpenDeviceRequest {
+		return &driver.OpenDeviceRequest{PluginInstanceID: "instance-a", DeviceID: "board-1", ConnectionHints: hints}
+	}
+	baseHints := map[string]string{"name": "STC-B #1", "port": "COM3", "baud": "115200", "protocol": "v1"}
+
+	for i := 0; i < 2; i++ {
+		resp, err := d.OpenDevice(context.Background(), request(baseHints))
+		if err != nil || resp == nil || !resp.Status.IsOK() {
+			t.Fatalf("open attempt %d: resp=%+v err=%v", i+1, resp, err)
+		}
+	}
+	if opens["COM3"] != 1 {
+		t.Fatalf("COM3 opened %d times, want 1 for identical binding", opens["COM3"])
+	}
+
+	cases := []struct {
+		name  string
+		hints map[string]string
+	}{
+		{"name", map[string]string{"name": "renamed", "port": "COM3", "baud": "115200", "protocol": "v1"}},
+		{"port", map[string]string{"name": "STC-B #1", "port": "COM4", "baud": "115200", "protocol": "v1"}},
+		{"baud", map[string]string{"name": "STC-B #1", "port": "COM3", "baud": "9600", "protocol": "v1"}},
+		{"protocol", map[string]string{"name": "STC-B #1", "port": "COM3", "baud": "115200", "protocol": "legacy"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, err := d.OpenDevice(context.Background(), request(tc.hints))
+			if err != nil {
+				t.Fatalf("transport error: %v", err)
+			}
+			if resp == nil || resp.Status == nil || resp.Status.Code != status.CodeFailedPrecondition {
+				t.Fatalf("conflicting binding response = %+v, want FAILED_PRECONDITION", resp)
+			}
+			active := d.device("instance-a", "board-1")
+			if active == nil || active.cfg.Port != "COM3" || effectiveProtocol(active.cfg.Protocol) != "v1" {
+				t.Fatalf("active binding changed: %+v", active)
+			}
+		})
+	}
+	if opens["COM3"] != 1 || opens["COM4"] != 0 {
+		t.Fatalf("open counts after conflicts = %v, want COM3:1 COM4:0", opens)
+	}
+	if ports["COM3"].isClosed() {
+		t.Fatal("conflicting request closed the active port")
 	}
 }
 

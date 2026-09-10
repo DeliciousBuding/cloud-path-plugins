@@ -435,12 +435,26 @@ func (d *Driver) Discover(_ context.Context, req *driver.DiscoverRequest, stream
 	d.mu.Lock()
 	cfg := d.cfgs[req.PluginInstanceID]
 	d.mu.Unlock()
-	if cfg.DeviceID != "" {
-		devID := cfg.DeviceID
-		ext := cfg.Port
-		if err := send(d.nextSeq(), &driver.DiscoveryFoundDevice{DeviceID: devID, ExternalID: ext, Manufacturer: "STC-B", Model: "IAP15F2K61S2"}); err != nil {
-			return err
-		}
+
+	// 手工发现不扫描硬件：只有 device_id 与 port 都配置完整时，才把一个
+	// 可继续打开的目标报告为 found。缺失配置是失败而非“发现 0 台”。
+	missing := ""
+	switch {
+	case cfg.DeviceID == "":
+		missing = "device_id"
+	case cfg.Port == "":
+		missing = "port"
+	}
+	if missing != "" {
+		return send(d.nextSeq(), &driver.DiscoveryFailed{Status: status.Errorf(
+			status.CodeFailedPrecondition, "discover 配置不完整：%s 缺失", missing,
+		)})
+	}
+
+	if err := send(d.nextSeq(), &driver.DiscoveryFoundDevice{
+		DeviceID: cfg.DeviceID, ExternalID: cfg.Port, Manufacturer: "STC-B", Model: "IAP15F2K61S2",
+	}); err != nil {
+		return err
 	}
 	return send(d.nextSeq(), &driver.DiscoveryFinished{FoundCount: 1})
 }
@@ -488,6 +502,30 @@ func (d *Driver) openConfigFor(req *driver.OpenDeviceRequest) (string, deviceCon
 	return deviceID, cfg, nil
 }
 
+func effectiveBaud(baud int) int {
+	if baud <= 0 {
+		return 115200
+	}
+	return baud
+}
+
+func effectiveProtocol(protocol string) string {
+	if strings.EqualFold(strings.TrimSpace(protocol), "v1") {
+		return "v1"
+	}
+	return "legacy"
+}
+
+// sameDeviceBinding 判断重复 OpenDevice 是否仍是同一物理绑定。名称也纳入比较，
+// 避免调用方以为新 hints 生效、实际命令仍流向旧连接；冲突时保留旧连接并 fail closed。
+func sameDeviceBinding(active, requested deviceConfig) bool {
+	return active.ID == requested.ID &&
+		active.Name == requested.Name &&
+		active.Port == requested.Port &&
+		effectiveBaud(active.Baud) == effectiveBaud(requested.Baud) &&
+		effectiveProtocol(active.Protocol) == effectiveProtocol(requested.Protocol)
+}
+
 // OpenDevice 打开串口并启动 RX 循环。
 func (d *Driver) OpenDevice(ctx context.Context, req *driver.OpenDeviceRequest) (*driver.OpenDeviceResponse, error) {
 	d.mu.Lock()
@@ -508,7 +546,17 @@ func (d *Driver) OpenDevice(ctx context.Context, req *driver.OpenDeviceRequest) 
 	key := instanceDeviceKey(req.PluginInstanceID, deviceID)
 	d.devMu.Lock()
 	defer d.devMu.Unlock()
-	if _, ok := d.devices[key]; ok {
+	if active, ok := d.devices[key]; ok {
+		if !sameDeviceBinding(active.cfg, cfg) {
+			return &driver.OpenDeviceResponse{
+				PluginInstanceID: req.PluginInstanceID,
+				DeviceID:         deviceID,
+				Status: status.Errorf(status.CodeFailedPrecondition,
+					"device %q 已以不同绑定打开：active name=%q port=%q baud=%d protocol=%s; requested name=%q port=%q baud=%d protocol=%s；请先 CloseDevice",
+					deviceID, active.cfg.Name, active.cfg.Port, effectiveBaud(active.cfg.Baud), effectiveProtocol(active.cfg.Protocol),
+					cfg.Name, cfg.Port, effectiveBaud(cfg.Baud), effectiveProtocol(cfg.Protocol)),
+			}, nil
+		}
 		return &driver.OpenDeviceResponse{PluginInstanceID: req.PluginInstanceID, DeviceID: deviceID, Status: status.New()}, nil
 	}
 	dev, err := openDevice(ctx, cfg, func(entityID, eventType string) { d.pushEvent(req.PluginInstanceID, deviceID, entityID, eventType) })

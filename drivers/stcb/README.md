@@ -54,6 +54,10 @@ Edge 把每台设备的 port/baud/name/protocol 作为 OpenDevice connection hin
 
 设备详情页和 REST/WS 命令按完整 `<edge_id>/<device_id>` 选择目标。Application binding 必须保存完整目标；Core 0.2.40+ 会按 `(device_id, entity_id)` 校验并路由。旧绑定只有 `entity_id` 时仅在唯一在线提供者下兼容；多板在线会 fail closed，并报 `entity ... is ambiguous across online devices: ...`。处理方式是重新绑定到目标设备，不能把 `EntityID` 改成 `stcb-real-1/buzzer` 绕过：Driver 不掌握 Edge 前缀，已发布的 `entity_id` 也必须保持稳定。
 
+同一 `(PluginInstanceID, DeviceID)` 的重复 `OpenDevice` 只有 `name/port/baud/protocol` 全部一致时才幂等。任一连接提示改变都会返回 `FAILED_PRECONDITION`，保留旧连接，调用方必须先 `CloseDevice` 再重开，不能把后续命令静默发到旧端口。
+
+`Discover` 不做硬件猜测：只有 `device_id` 与 `port` 同时存在时才上报一台设备并以 `FoundCount=1` 结束；配置缺失或端口缺失时返回 `DiscoveryFailed` / `FAILED_PRECONDITION`，发现数为 0，绝不伪造一台设备。
+
 ## Board capabilities
 
 13 个稳定 Capability、16 个硬件 Entity：
