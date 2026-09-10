@@ -119,7 +119,7 @@ def validate(value):
         "apiVersion": "plugins.cloudpath.dev/v1alpha1",
         "kind": "Application",
         "id": PLUGIN_ID,
-        "version": "0.3.0",
+        "version": "0.3.1",
         "protocol": 1,
         "entrypoint": ENTRYPOINT,
         "compatibility": {"core": ">=0.2.29 <0.3.0"},
@@ -176,8 +176,13 @@ def validate_tree(root, value):
                 errors.append(f"non-public import in {relative}: {name}")
             if name.startswith(CORE + "/") and not name.startswith(CORE + "/sdk/go/"):
                 errors.append(f"non-SDK Core import in {relative}: {name}")
-    if "Version **0.3.0**" not in (root / "README.md").read_text(encoding="utf-8"):
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    version = value.get("version")
+    if not isinstance(version, str) or f"Version **{version}**" not in readme:
         errors.append("README.md version does not match the manifest")
+    changelog_path = root / "CHANGELOG.md"
+    if not changelog_path.is_file() or not isinstance(version, str) or f"## v{version} " not in changelog_path.read_text(encoding="utf-8"):
+        errors.append("CHANGELOG.md is missing the current release entry")
     return errors
 
 
