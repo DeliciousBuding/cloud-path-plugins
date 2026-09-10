@@ -5,7 +5,7 @@
 requirements:
   - id: reminder-output
     capability: cloudpath.dev/capability/buzzer@1
-    cardinality: one
+    cardinality: zero-or-one
   - id: compartments
     capability: cloudpath.dev/capability/key@1
     cardinality: one-or-more

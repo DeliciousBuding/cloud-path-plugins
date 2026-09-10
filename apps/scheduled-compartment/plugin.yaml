@@ -1,7 +1,7 @@
 apiVersion: plugins.cloudpath.dev/v1alpha1
 kind: Application
 id: io.github.deliciousbuding.cloud-path-app-scheduled-compartment
-version: 0.2.10
+version: 0.3.0
 protocol: 1
 # Executable entrypoint. The Application Protocol v1 service is implemented in
 # cmd/cloud-path-app-scheduled-compartment and served over the host transport.
@@ -13,7 +13,7 @@ compatibility:
 requirements:
   - id: reminder-output
     capability: cloudpath.dev/capability/buzzer@1
-    cardinality: one
+    cardinality: zero-or-one
   - id: compartments
     capability: cloudpath.dev/capability/key@1
     cardinality: one-or-more

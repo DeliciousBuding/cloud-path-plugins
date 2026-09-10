@@ -281,7 +281,7 @@ func TestDescriptorRequirements(t *testing.T) {
 		card string
 		min  uint32
 	}{
-		"reminder-output": {"cloudpath.dev/capability/buzzer@1", "one", 0},
+		"reminder-output": {"cloudpath.dev/capability/buzzer@1", "zero-or-one", 0},
 		"compartments":    {"cloudpath.dev/capability/key@1", "one-or-more", 1},
 		"local-display":   {"cloudpath.dev/capability/display-text@1", "zero-or-one", 0},
 	}
@@ -331,14 +331,15 @@ func TestConfigureAndValidateBinding(t *testing.T) {
 		t.Fatalf("expected no issues, got %+v", vResp.Issues)
 	}
 
-	// missing reminder-output -> invalid
-	bad := []application.Binding{
+	// 省略 reminder-output 现在是合法的 display-only 形态：单板只有一个扬声器时，
+	// 药盒可以只做显示与确认，把蜂鸣让给别的应用。
+	displayOnly := []application.Binding{
 		{RequirementID: "compartments", EntityID: c1},
 		{RequirementID: "compartments", EntityID: c2},
 		{RequirementID: "compartments", EntityID: c3},
 	}
-	if r := a.validate(bad); r.Valid {
-		t.Fatal("expected missing reminder-output to be invalid")
+	if r := a.validate(displayOnly); !r.Valid {
+		t.Fatalf("display-only bindings rejected: %+v", r.Issues)
 	}
 
 	// configured three compartments cannot use only two bindings

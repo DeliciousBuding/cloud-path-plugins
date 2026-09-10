@@ -2,7 +2,7 @@
 
 把一个或多个按键变成**取药确认**输入：按每日计划或管理台操作开启提醒窗口，记录按时确认、到期未确认、迟到确认，以及提醒命令的实际回执。
 
-**版本 0.2.10；需要 Core >=0.2.29 且 <0.3.0，公开 Go SDK v0.2.15+。** 两个用户操作依赖 `JobDescriptor.ManualOnly`，不能放到不识别该字段的旧 Core 上运行，否则旧的分钟调度器可能把用户操作当自动任务。
+**版本 0.3.0；需要 Core >=0.2.29 且 <0.3.0，公开 Go SDK v0.2.15+。** 两个用户操作依赖 `JobDescriptor.ManualOnly`，不能放到不识别该字段的旧 Core 上运行，否则旧的分钟调度器可能把用户操作当自动任务。
 
 状态：`IMPLEMENTED`。仓库测试覆盖内存协议、业务状态机和失败边界；不代表管理台 HTTP、真实设备或现场验收已经通过。应用不直接打开设备、串口或网络连接，只通过公开 SDK 请求已绑定的 Capability。
 
@@ -18,7 +18,7 @@
 
 | Requirement | Capability | 数量 / 行为 |
 |---|---|---|
-| `reminder-output` | `cloudpath.dev/capability/buzzer@1` | 必须一个；静音策略下不发出蜂鸣命令（`reminder_state=suppressed`），可听策略走真实命令与回执链路 |
+| `reminder-output` | `cloudpath.dev/capability/buzzer@1` | 可选（0 或 1）；省略即为 display-only，静音策略下不发出蜂鸣命令（`reminder_state=suppressed`），可听策略走真实命令与回执链路 |
 | `compartments` | `cloudpath.dev/capability/key@1` | 静态最少 1；实际绑定数必须等于配置格数 |
 | `local-display` | `cloudpath.dev/capability/display-text@1` | 可选一个；配置显式 `display` 策略后提供静音视觉提示，无配置/绑定不输出 |
 

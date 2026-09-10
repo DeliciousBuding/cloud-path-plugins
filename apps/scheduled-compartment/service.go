@@ -17,7 +17,7 @@ import (
 // Manifest identity. These values must mirror plugin.yaml.
 const (
 	pluginIDValue    = "io.github.deliciousbuding.cloud-path-app-scheduled-compartment"
-	pluginVersion    = "0.2.10"
+	pluginVersion    = "0.3.0"
 	jobWindowCheck   = "window-check"
 	jobStartReminder = "start-reminder"
 	jobConfirmWindow = "confirm-window"
@@ -176,7 +176,7 @@ func (s *Service) Describe(context.Context) (*application.ApplicationDescriptor,
 		Version:        s.version,
 		SchemaVersions: []string{application.SchemaVersion},
 		Requirements: []application.RequirementDescriptor{
-			{ID: "reminder-output", Capability: buzzerCap, Cardinality: "one"},
+			{ID: "reminder-output", Capability: buzzerCap, Cardinality: "zero-or-one"},
 			{ID: "compartments", Capability: keyCap, Cardinality: "one-or-more", MinItems: 1},
 			{ID: "local-display", Capability: displayCap, Cardinality: "zero-or-one"},
 		},
@@ -641,11 +641,11 @@ func validateBindings(bindings []application.Binding, cfg *Config) []application
 		}
 	}
 
-	if counts["reminder-output"] != 1 {
+	if counts["reminder-output"] > 1 {
 		issues = append(issues, application.BindingIssue{
 			RequirementID: "reminder-output",
 			Severity:      "error",
-			Message:       fmt.Sprintf("reminder-output requires exactly one binding, got %d", counts["reminder-output"]),
+			Message:       fmt.Sprintf("reminder-output accepts at most one binding, got %d", counts["reminder-output"]),
 		})
 	}
 	if counts["compartments"] < 1 {

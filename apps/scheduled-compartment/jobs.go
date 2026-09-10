@@ -212,7 +212,7 @@ func (s *Service) readyForEffects(instanceID string, st *instanceState) error {
 	if s.closed || st.deliveryUncertain {
 		return status.Errorf(status.CodeUnavailable, "instance is stopped or previous effect delivery is uncertain")
 	}
-	if st.config == nil || len(st.bindings["compartments"]) != len(st.config.Compartments) || reminderEntity(st) == "" {
+	if st.config == nil || len(st.bindings["compartments"]) != len(st.config.Compartments) {
 		return status.Errorf(status.CodeFailedPrecondition, "configure the instance and validate exactly one key binding per configured compartment first")
 	}
 	if s.writers[instanceID] == nil {
